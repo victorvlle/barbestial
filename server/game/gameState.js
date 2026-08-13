@@ -63,7 +63,11 @@ function jogarCarta(estado, jogadorId, uid, escolha = null) {
 
   const [carta] = jogador.mao.splice(indice, 1);
   estado.log.push({
-    texto: `${jogador.nome} jogou ${buscarAnimal(carta.animal).nome}.`,
+    partes: [
+      { t: `${jogador.nome} jogou ` },
+      { t: buscarAnimal(carta.animal).nome, dono: jogador.id },
+      { t: '.' },
+    ],
     dono: jogador.id,
   });
 
@@ -73,7 +77,8 @@ function jogarCarta(estado, jogadorId, uid, escolha = null) {
 
   if (acabou(estado)) {
     estado.fase = 'terminado';
-    estado.vencedores = calcularVencedores(estado);
+    estado.resultado = calcularResultado(estado);
+    estado.vencedores = estado.resultado.vencedores;
   } else {
     passarAVez(estado);
   }
@@ -96,13 +101,32 @@ function placar(estado) {
   });
 }
 
-function calcularVencedores(estado) {
-  const tabela = placar(estado);
+// Devolve nao so quem ganhou, mas POR QUE - a tela final explica o desempate.
+function calcularResultado(estado) {
+  const tabela = placar(estado).sort(
+    (a, b) => b.entraram - a.entraram || a.somaForcas - b.somaForcas
+  );
   const maisAnimais = Math.max(...tabela.map((p) => p.entraram));
   const empatados = tabela.filter((p) => p.entraram === maisAnimais);
-  if (empatados.length === 1) return empatados;
+
+  if (empatados.length === 1) {
+    return { vencedores: empatados, criterio: 'animais', empatados, tabela };
+  }
+
   const menorSoma = Math.min(...empatados.map((p) => p.somaForcas));
-  return empatados.filter((p) => p.somaForcas === menorSoma);
+  const vencedores = empatados.filter((p) => p.somaForcas === menorSoma);
+  return {
+    // Empate no numero de animais: decide a MENOR soma de forcas.
+    vencedores,
+    criterio: vencedores.length === empatados.length ? 'empate-total' : 'forca',
+    empatados,
+    tabela,
+  };
+}
+
+// Mantida por compatibilidade com os testes e com quem so quer a lista.
+function calcularVencedores(estado) {
+  return calcularResultado(estado).vencedores;
 }
 
 // Pre-visualizacao: para cada carta da mao de quem esta na vez, simula a jogada
@@ -160,9 +184,10 @@ function estadoVisivelPara(estado, jogadorId) {
     ralo: estado.ralo,
     quadros: estado.quadros || [],
     jogadas: estado.jogadas,
-    log: estado.log.slice(-12),
+    log: estado.log.slice(-14),
     placar: placar(estado),
     vencedores: estado.vencedores,
+    resultado: estado.resultado || null,
     jogadores: estado.jogadores.map((j) => ({
       id: j.id,
       nome: j.nome,
@@ -176,6 +201,7 @@ function estadoVisivelPara(estado, jogadorId) {
 
 module.exports = {
   criarEstado,
+  calcularResultado,
   jogarCarta,
   estadoVisivelPara,
   placar,

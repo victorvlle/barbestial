@@ -39,17 +39,15 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   await bruno.click('#btn-entrar'); await espera(400);
   await ana.click('#btn-comecar'); await espera(700);
 
-  const daVez = async () => ((await ana.textContent('#vez')) || '').includes('sua vez') ? ana : bruno;
+  const daVez = async () => ((await ana.locator('.faixa--minha-vez').count()) > 0 ? ana : bruno);
   const jogar = async () => {
     const p = await daVez();
     await p.locator('#mao .carta.jogavel').first().waitFor({ timeout: 9000 });
     await p.locator('#mao .carta.jogavel').first().click();
     await espera(400);
     let e = 0;
-    while (await p.locator('#escolha').isVisible() && e++ < 3) {
-      const bt = p.locator('#escolha-opcoes button');
-      if (await bt.count()) await bt.first().click();
-      else await p.locator('#fila .carta.alvo').first().click();
+    while (await p.locator('.faixa--decidindo').count() > 0 && e++ < 3) {
+      await p.locator('#fila .carta.alvo').first().click();
       await espera(400);
     }
     await espera(2900);
@@ -59,6 +57,8 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   // prévia
   const p = await daVez();
   await p.locator('#mao .carta.jogavel').first().waitFor({ timeout: 9000 });
+  await p.mouse.move(5, 5); // tira o cursor de cima das cartas
+  await espera(300);
   check(!(await p.locator('#previa').evaluate(e => e.classList.contains('previa--ativa'))), 'a prévia começa escondida');
   await p.locator('#mao .carta.jogavel').first().hover();
   await espera(500);
@@ -85,7 +85,40 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   const cores = await ana.locator('#log li.com-dono').evaluateAll(els => [...new Set(els.map(e => getComputedStyle(e).borderLeftColor))]);
   check(cores.length >= 1, `cores presentes no log: ${cores.join(' | ')}`);
 
-  // desligar a prévia
+  // tudo dentro da tela, sem rolagem da página
+  const cabe = await ana.evaluate(() => ({
+    rolagem: document.documentElement.scrollHeight > window.innerHeight + 2,
+    altura: document.documentElement.scrollHeight,
+    janela: window.innerHeight,
+  }));
+  check(!cabe.rolagem, `a mesa cabe na tela sem rolar (${cabe.altura} <= ${cabe.janela})`);
+
+  const larguraFila = await ana.locator('.pista').evaluate((e) => Math.round(e.getBoundingClientRect().width));
+  const larguraCarta = await ana.locator('#fila .carta').first().evaluate((e) => Math.round(e.getBoundingClientRect().width));
+  check(Math.abs(larguraFila - (larguraCarta * 5 + 8 * 4)) < 6,
+    `a fila tem a largura exata de 5 cartas (${larguraFila}px para cartas de ${larguraCarta}px)`);
+
+  // joga ate o fim para ver a comemoração
+  for (let i = 0; i < 40; i++) {
+    if (await ana.locator('#fim').isVisible()) break;
+    const q = await daVez();
+    try { await q.locator('#mao .carta.jogavel').first().waitFor({ timeout: 6000 }); } catch { break; }
+    await q.locator('#mao .carta.jogavel').first().click();
+    await espera(350);
+    let et = 0;
+    while (await q.locator('.faixa--decidindo').count() > 0 && et++ < 3) {
+      await q.locator('#fila .carta.alvo').first().click();
+      await espera(350);
+    }
+    await espera(2600);
+  }
+
+  check(await ana.locator('#fim').isVisible(), 'a comemoração de fim de jogo apareceu');
+  const textoFim = (await ana.textContent('#fim-conteudo')).replace(/\s+/g, ' ').trim();
+  check(textoFim.length > 40, `explica o resultado: "${textoFim.slice(0, 100)}…"`);
+  check((await ana.locator('#confete i').count()) > 10, 'com confete');
+  await ana.screenshot({ path: path.join(raiz, 'shot-fim.png') });
+
   check(erros.length === 0, `nenhum erro de JavaScript ${erros.length ? JSON.stringify(erros.slice(0,2)) : ''}`);
   await b.close(); s.kill(); process.exit(falhas ? 1 : 0);
 })().catch(e => { console.error('EXPLODIU:', e); s.kill(); process.exit(1); });

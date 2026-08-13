@@ -241,3 +241,32 @@ test('desempate é pela menor soma de forças', () => {
   const vencedores = calcularVencedores(estado);
   assert.deepStrictEqual(vencedores.map((v) => v.id), ['b']); // 1 x 1, mas 2 < 12
 });
+
+// ------------------------------------------------- camaleão virando leão
+
+test('camaleão que imita o leão sofre a regra dos dois leões e vai pro ralo', () => {
+  const estado = estadoCom('leao', 'zebra');
+  const camaleao = soOPoder(estado, 'camaleao', { especie: 'leao' });
+  // Enquanto age, ele É um leão: com outro leão na fila, é expulso.
+  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'zebra']);
+  assert.deepStrictEqual(estado.ralo, [camaleao]);
+});
+
+test('camaleão imitando leão sem outro leão na fila assume a frente', () => {
+  // sem leão na fila não há o que imitar, então usamos uma fila com leão E o efeito
+  const estado = estadoCom('macaco', 'leao');
+  const camaleao = soOPoder(estado, 'camaleao', { especie: 'leao' });
+  // há um leão na fila, então o camaleão-leão é expulso (mesma regra acima)
+  assert.ok(estado.ralo.includes(camaleao));
+  assert.ok(ordem(estado.fila).includes('macaco'), 'o macaco não é espantado por um leão expulso');
+});
+
+test('o desempate explica o motivo', () => {
+  const { calcularResultado } = require('../server/game/gameState');
+  const estado = criarEstado([{ id: 'a', nome: 'Ana' }, { id: 'b', nome: 'Bruno' }]);
+  estado.bar = [carta('leao', 'a'), carta('papagaio', 'b')];
+  const r = calcularResultado(estado);
+  assert.strictEqual(r.criterio, 'forca');
+  assert.deepStrictEqual(r.vencedores.map((v) => v.id), ['b']);
+  assert.strictEqual(r.empatados.length, 2);
+});

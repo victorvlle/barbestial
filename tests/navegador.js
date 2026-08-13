@@ -61,14 +61,16 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   await espera(500);
   check(await ana.locator('#tela-jogo').isVisible(), 'a mesa apareceu');
   check((await ana.locator('#mao .carta').count()) === 4, 'Ana vê 4 cartas na mão');
-  check((await ana.textContent('#vez')).includes('sua vez'), 'a tela avisa que é a vez da Ana');
+  check(/sua vez/i.test(await ana.textContent('#vez')), 'a tela avisa que é a vez da Ana');
+  check((await ana.locator('.faixa--minha-vez').count()) === 1, 'a faixa acende avisando a vez dela');
+  check((await ana.evaluate(() => document.title)).includes('Sua vez'), 'o título da aba também avisa');
   check((await bruno.textContent('#vez')).includes('Ana'), 'Bruno vê que é a vez da Ana');
   check((await ana.locator('#mao .carta.jogavel').count()) === 4, 'as cartas da Ana estão clicáveis');
   check((await bruno.locator('#mao .carta.jogavel').count()) === 0, 'as do Bruno não (não é a vez dele)');
 
   // joga cartas ate cair uma que peca decisao, so para fotografar a barra de escolha
   let jogadas = 0, viuEscolha = false;
-  const daVez = async () => ((await ana.textContent('#vez')) || '').includes('sua vez') ? ana : bruno;
+  const daVez = async () => ((await ana.locator('.faixa--minha-vez').count()) > 0 ? ana : bruno);
 
   while (jogadas < 14) {
     const p = await daVez();
@@ -85,16 +87,15 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
 
     // O camaleao pede duas decisoes seguidas (especie, e depois a decisao da
     // especie copiada). Por isso resolvemos escolhas ate a barra sumir.
+    // A decisao agora acontece clicando numa carta da fila, nao em botoes.
     let etapas = 0;
-    while (await p.locator('#escolha').isVisible() && etapas < 3) {
+    while (await p.locator('.faixa--decidindo').count() > 0 && etapas < 3) {
       if (!viuEscolha) {
         viuEscolha = true;
         await p.screenshot({ path: path.join(raiz, 'shot-escolha.png') });
-        check(true, `barra de escolha apareceu: "${(await p.textContent('#escolha-texto')).trim()}"`);
+        check(true, `pediu decisão: "${(await p.textContent('#vez')).replace(/\s+/g, ' ').trim()}"`);
       }
-      const botoes = p.locator('#escolha-opcoes button');
-      if (await botoes.count() > 0) await botoes.first().click();
-      else await p.locator('#fila .carta.alvo').first().click();
+      await p.locator('#fila .carta.alvo').first().click();
       await espera(400);
       etapas++;
     }

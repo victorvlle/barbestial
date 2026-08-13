@@ -143,7 +143,7 @@ function renderizarSala(sala, meuId) {
   avisar('aviso-sala', souAnfitriao && gente < sala.minimo ? 'Precisa de mais um jogador.' : '');
 }
 
-// acoes = { podeJogar, cartaEmEscolha, escolhendoAlvo, aoClicarMao, aoClicarFila }
+// acoes = { podeJogar, cartaEmEscolha, emEscolha, opcaoDaCarta, aoClicarMao, ... }
 function renderizarJogo(estado, acoes = {}) {
   const cores = Object.fromEntries(estado.jogadores.map((j) => [j.id, j.cor]));
   const mapa = mapearCartas(estado);
@@ -153,25 +153,37 @@ function renderizarJogo(estado, acoes = {}) {
   pintarTabuleiro(quadroFinal(estado), mapa, cores);
   esquecerCartas(new Set(mapa.keys()));
 
+  const faixa = $('faixa');
   if (estado.fase === 'terminado') {
     const nomes = (estado.vencedores || []).map((v) => v.nome).join(' e ');
-    $('vez').innerHTML = `Fim de jogo! Vitória de <strong>${nomes}</strong>`;
-  } else {
+    $('vez').innerHTML = `Fim de jogo — vitória de <strong>${nomes}</strong>`;
+    faixa.classList.remove('faixa--minha-vez');
+  } else if (!acoes.emEscolha) {
     $('vez').innerHTML = minhaVez
-      ? 'É a <strong>sua vez</strong> — clique numa carta da sua mão'
-      : `Vez de <strong>${daVez ? daVez.nome : '—'}</strong>`;
+      ? '<span class="selo-vez">SUA VEZ</span> escolha uma carta da sua mão'
+      : `Vez de <strong style="color: var(--${cores[estado.vezDe]})">${daVez ? daVez.nome : '—'}</strong>`;
+    faixa.classList.toggle('faixa--minha-vez', minhaVez);
   }
   document.querySelector('.mesa').classList.toggle('minha-vez', minhaVez);
 
+  // Aviso fora da aba: quem está com o jogo em segundo plano vê pelo título.
+  document.title = minhaVez ? '▶ Sua vez — Bar Bestial' : 'Bar Bestial';
+
   // Cliques: usamos onclick (propriedade) de proposito. Como os elementos sao
   // reaproveitados, addEventListener empilharia um handler novo a cada desenho.
-  for (const filho of $('fila').children) {
-    const alvo = Boolean(acoes.escolhendoAlvo);
-    filho.classList.toggle('alvo', alvo);
-    filho.onclick = alvo ? () => acoes.aoClicarFila(mapa.get(filho.dataset.uid)) : null;
-    filho.onmouseenter = alvo ? () => acoes.aoPassarNaFila?.(mapa.get(filho.dataset.uid)) : null;
-    filho.onmouseleave = alvo ? () => acoes.aoSairDaCarta?.() : null;
-  }
+  // Toda decisão do jogo acontece clicando numa carta da fila: quem o papagaio
+  // enxota, quem o camaleão vira, até onde o canguru pula. O rótulo em cima da
+  // carta diz o que aquele clique faz.
+  const filhos = [...$('fila').children];
+  filhos.forEach((filho, i) => {
+    const carta = mapa.get(filho.dataset.uid);
+    const opcao = acoes.opcaoDaCarta?.(carta, i, filhos.length);
+    filho.classList.toggle('alvo', Boolean(opcao));
+    filho.dataset.rotulo = opcao?.rotulo || '';
+    filho.onclick = opcao ? () => acoes.aoEscolherNaFila(opcao) : null;
+    filho.onmouseenter = opcao ? () => acoes.aoPassarNaFila?.(opcao) : null;
+    filho.onmouseleave = opcao ? () => acoes.aoSairDaCarta?.() : null;
+  });
   for (const filho of $('mao').children) {
     const jogavel = Boolean(acoes.podeJogar);
     filho.classList.toggle('jogavel', jogavel);
@@ -180,7 +192,7 @@ function renderizarJogo(estado, acoes = {}) {
     filho.onmouseenter = jogavel ? () => acoes.aoPassarNaMao?.(mapa.get(filho.dataset.uid)) : null;
     filho.onmouseleave = jogavel ? () => acoes.aoSairDaCarta?.() : null;
   }
-  if (!acoes.escolhendoAlvo && !acoes.podeJogar) esconderPrevia();
+  if (!acoes.emEscolha && !acoes.podeJogar) esconderPrevia();
 
   $('dica-mao').textContent =
     estado.fase === 'terminado'
@@ -204,9 +216,22 @@ function renderizarJogo(estado, acoes = {}) {
   log.innerHTML = '';
   for (const linha of [...estado.log].reverse()) {
     const li = document.createElement('li');
-    li.textContent = linha.texto;
-    // A linha ganha a cor de QUEM agiu. Numa ação recorrente isso é o dono do
-    // animal, que pode não ser o jogador da vez.
+
+    // Cada linha vem do servidor em pedaços. Os que representam uma carta trazem
+    // o dono, e viram uma etiqueta com a cor dele - assim dá para ver de quem
+    // era o animal que foi devorado, não só quem devorou.
+    for (const pedaco of linha.partes || []) {
+      if (pedaco.dono && cores[pedaco.dono]) {
+        const etiqueta = document.createElement('span');
+        etiqueta.className = 'bicho-nome';
+        etiqueta.style.setProperty('--c', `var(--${cores[pedaco.dono]})`);
+        etiqueta.textContent = pedaco.t;
+        li.appendChild(etiqueta);
+      } else {
+        li.appendChild(document.createTextNode(pedaco.t));
+      }
+    }
+
     if (linha.dono && cores[linha.dono]) {
       li.style.borderLeftColor = `var(--${cores[linha.dono]})`;
       li.classList.add('com-dono');
@@ -215,51 +240,21 @@ function renderizarJogo(estado, acoes = {}) {
   }
 }
 
-// Barra de escolha: aparece so quando a carta jogada pede uma decisao.
-function renderizarEscolha(escolha, estado, acoes) {
-  const barra = $('escolha');
-  if (!escolha) {
-    barra.classList.add('escondida');
-    return;
-  }
-  barra.classList.remove('escondida');
+// A faixa no topo diz de quem e a vez ou, durante uma decisao, o que fazer.
+function renderizarEscolha(escolha) {
+  const faixa = $('faixa');
+  const botao = $('btn-cancelar');
+  faixa.classList.toggle('faixa--decidindo', Boolean(escolha));
+  botao.classList.toggle('escondida', !escolha);
+  if (!escolha) return;
 
-  const opcoes = $('escolha-opcoes');
-  opcoes.innerHTML = '';
-
-  if (escolha.tipo === 'animal') {
-    $('escolha-texto').textContent = 'Clique no animal da fila que você quer enxotar:';
-  }
-
-  if (escolha.tipo === 'pular1ou2') {
-    $('escolha-texto').textContent = 'Pular quantos animais?';
-    for (const quantos of [1, 2]) {
-      if (quantos > estado.fila.length) continue;
-      const botao = document.createElement('button');
-      botao.textContent = quantos === 1 ? 'Pular 1' : 'Pular 2';
-      botao.addEventListener('click', () => acoes.concluir({ pulos: quantos }));
-      botao.addEventListener('mouseenter', () => acoes.espiar?.(`pulos:${quantos}`));
-      botao.addEventListener('mouseleave', () => esconderPrevia());
-      opcoes.appendChild(botao);
-    }
-  }
-
-  if (escolha.tipo === 'especie') {
-    $('escolha-texto').textContent = 'Qual animal da fila o camaleão vai imitar?';
-    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'camaleao');
-    for (const especie of especies) {
-      const animal = CATALOGO[especie];
-      const botao = document.createElement('button');
-      botao.innerHTML = `${desenhoDo(especie)} ${animal.nome} (${animal.forca})`;
-      botao.title = animal.poder;
-      botao.addEventListener('click', () => acoes.escolherEspecie(especie));
-      botao.addEventListener('mouseenter', () => acoes.espiar?.(`especie:${especie}`));
-      botao.addEventListener('mouseleave', () => esconderPrevia());
-      opcoes.appendChild(botao);
-    }
-  }
+  const instrucoes = {
+    animal: 'Clique no animal da fila que você quer enxotar',
+    especie: 'Clique no animal da fila que o camaleão vai virar',
+    pular1ou2: 'Clique em até onde o canguru vai pular',
+  };
+  $('vez').innerHTML = `<span class="decidir">decida</span> ${instrucoes[escolha.tipo] || ''}`;
 }
-
 
 // ---------------------------------------------------------------- prévia
 
@@ -370,4 +365,91 @@ function textoDasInstrucoes() {
 
     <h3>Os 12 animais</h3>
     <ul class="instr-lista">${linhas}</ul>`;
+}
+
+
+// ------------------------------------------------------- fim de partida
+
+function explicarResultado(resultado) {
+  const nomes = resultado.vencedores.map((v) => v.nome).join(' e ');
+  const n = resultado.vencedores[0].entraram;
+
+  if (resultado.criterio === 'empate-total') {
+    return {
+      titulo: 'Empate!',
+      quem: nomes,
+      motivo: `Mesma quantidade de animais no bar (${n}) e a mesma soma de forças.
+               Não dá para desempatar: a vitória é dividida.`,
+    };
+  }
+
+  if (resultado.criterio === 'forca') {
+    const perdedores = resultado.empatados.filter(
+      (p) => !resultado.vencedores.some((v) => v.id === p.id)
+    );
+    const somaVencedor = resultado.vencedores[0].somaForcas;
+    const somaOutros = perdedores.map((p) => `${p.nome} ${p.somaForcas}`).join(', ');
+    return {
+      titulo: 'Vitória no desempate!',
+      quem: nomes,
+      motivo: `Empate em <strong>${n} animais</strong> no bar. O desempate é a
+               <strong>menor soma de forças</strong> entre os animais que entraram —
+               e aí ${nomes} levou, com <strong>${somaVencedor}</strong> contra ${somaOutros}.
+               Enfiar bichos fracos no bar vale mais do que parece.`,
+    };
+  }
+
+  return {
+    titulo: 'Fim de jogo!',
+    quem: nomes,
+    motivo: `${n === 1 ? '1 animal' : `${n} animais`} dentro do bar — mais que todo mundo.`,
+  };
+}
+
+function mostrarFimDeJogo(estado) {
+  const resultado = estado.resultado;
+  if (!resultado) return;
+  const cores = Object.fromEntries(estado.jogadores.map((j) => [j.id, j.cor]));
+  const { titulo, quem, motivo } = explicarResultado(resultado);
+  const corVencedor = cores[resultado.vencedores[0].id];
+
+  const linhas = resultado.tabela
+    .map((p) => {
+      const ganhou = resultado.vencedores.some((v) => v.id === p.id);
+      return `<li class="${ganhou ? 'ganhou' : ''}">
+        <span class="bolinha" style="background: var(--${p.cor})"></span>
+        <span>${p.nome}</span>
+        <span class="fim-num">${p.entraram}</span>
+        <span class="fim-forca">soma ${p.somaForcas}</span>
+      </li>`;
+    })
+    .join('');
+
+  $('fim-conteudo').innerHTML = `
+    <div class="fim-tacao">🏆</div>
+    <h2 class="fim-titulo">${titulo}</h2>
+    <p class="fim-quem" style="color: var(--${corVencedor})">${quem}</p>
+    <p class="fim-motivo">${motivo}</p>
+    <ul class="fim-placar">
+      <li class="fim-cabecalho"><span></span><span>jogador</span><span>no bar</span><span>desempate</span></li>
+      ${linhas}
+    </ul>`;
+
+  soltarConfete(corVencedor);
+  $('fim').classList.remove('escondida');
+}
+
+function soltarConfete(cor) {
+  const caixa = $('confete');
+  caixa.innerHTML = '';
+  const cores = [`var(--${cor})`, 'var(--neon)', '#ffe9c2'];
+  for (let i = 0; i < 40; i++) {
+    const papel = document.createElement('i');
+    papel.style.left = `${Math.random() * 100}%`;
+    papel.style.background = cores[i % cores.length];
+    papel.style.animationDelay = `${Math.random() * 1.2}s`;
+    papel.style.animationDuration = `${2.4 + Math.random() * 1.8}s`;
+    papel.style.transform = `rotate(${Math.random() * 360}deg)`;
+    caixa.appendChild(papel);
+  }
 }

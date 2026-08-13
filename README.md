@@ -62,6 +62,11 @@ Passo 5a concluido: tema "bar noturno" e animacao das cartas quadro a quadro.
 Passo 5b concluido: silhuetas proprias em SVG no lugar dos emojis, na cor do dono.
 Passo 5c concluido: log colorido por autor, botao "i" nas cartas, previa da jogada
 e menu com instrucoes.
+Passo 7 concluido: fila com a largura exata de 5 cartas, decisoes tomadas na
+propria carta da fila, aviso de vez, comemoracao final com o motivo do
+desempate, log com a cor do dono de cada animal, e a mesa inteira cabendo na
+tela. Corrigido: o camaleao que vira leao agora sofre a regra dos dois leoes.
+
 Passo 6: publicacao preparada (render.yaml, rota /saude, engines no package.json).
 
 ## Publicar

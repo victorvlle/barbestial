@@ -13,6 +13,7 @@ let escolha = null;
 // meio do movimento confunde o jogador e atrapalha o FLIP.
 let animando = false;
 let ultimaJogadaVista = -1;
+let comemorou = false;
 
 // ------------------------------------------------------------ conexao
 
@@ -48,6 +49,11 @@ socket.on('estado-atualizado', async (estado) => {
     await reproduzirJogada(estado);
   }
   atualizar();
+
+  if (estado.fase === 'terminado' && !comemorou) {
+    comemorou = true;
+    mostrarFimDeJogo(estado);
+  }
 });
 
 // Mostra os passos do turno um a um: a carta chegando, o poder dela, as acoes
@@ -74,15 +80,46 @@ function atualizar() {
   renderizarJogo(estadoAtual, {
     podeJogar: minhaVez && !escolha && !animando,
     cartaEmEscolha: escolha?.carta,
-    escolhendoAlvo: escolha?.tipo === 'animal',
+    emEscolha: Boolean(escolha),
+    opcaoDaCarta,
     aoClicarMao: comecarJogada,
-    aoClicarFila: (carta) => concluir({ alvoUid: carta.uid }),
+    aoEscolherNaFila: (opcao) => concluir(opcao.escolha),
     aoPassarNaMao: espiarJogada,
-    aoPassarNaFila: (carta) => escolha && espiarOpcao(`alvo:${carta.uid}`),
+    aoPassarNaFila: (opcao) => espiarOpcao(opcao.chave),
     aoSairDaCarta: esconderPrevia,
   });
 
-  renderizarEscolha(escolha, estadoAtual, { concluir, escolherEspecie, espiar: espiarOpcao });
+  renderizarEscolha(escolha);
+}
+
+// Traduz "clicar nesta carta da fila" para uma decisao concreta, conforme a
+// carta que esta sendo jogada. Devolve null quando aquela carta nao e uma
+// opcao valida - e assim ela nem fica clicavel.
+function opcaoDaCarta(carta, indice, total) {
+  if (!escolha || !carta) return null;
+
+  if (escolha.tipo === 'animal') {
+    return { rotulo: 'enxotar', escolha: { alvoUid: carta.uid }, chave: `alvo:${carta.uid}` };
+  }
+
+  if (escolha.tipo === 'especie') {
+    if (carta.animal === 'camaleao') return null; // camaleão não imita camaleão
+    return {
+      rotulo: `virar ${CATALOGO[carta.animal]?.nome || ''}`,
+      escolha: { especie: carta.animal },
+      chave: `especie:${carta.animal}`,
+      especie: carta.animal,
+    };
+  }
+
+  if (escolha.tipo === 'pular1ou2') {
+    // O canguru entra no fim da fila e pula os últimos. Clicar na última carta
+    // significa pular 1; na penúltima, pular 2.
+    const pulos = total - indice;
+    if (pulos > 2) return null;
+    return { rotulo: `pular ${pulos}`, escolha: { pulos }, chave: `pulos:${pulos}` };
+  }
+  return null;
 }
 
 // Passo 1 do clique: a carta pede alguma decisao?
@@ -106,21 +143,19 @@ function temOpcoes(tipo) {
   return true;
 }
 
-// O camaleao tem duas etapas: escolher a especie e, se ela tambem pedir decisao
-// (papagaio ou canguru), escolher de novo.
-function escolherEspecie(especie) {
-  escolha.dados.especie = especie;
-  const decisaoDaCopia = CATALOGO[especie]?.escolha;
-  if (decisaoDaCopia && temOpcoes(decisaoDaCopia)) {
-    escolha.tipo = decisaoDaCopia;
-    return atualizar();
-  }
-  concluir({});
-}
-
+// O camaleao pode ter duas etapas: escolher a especie e, se ela tambem pedir
+// decisao (virou papagaio ou canguru), escolher de novo - sempre clicando numa
+// carta da fila.
 function concluir(dados) {
-  const { carta } = escolha;
-  enviarJogada(carta, { ...escolha.dados, ...dados });
+  if (dados.especie) {
+    escolha.dados.especie = dados.especie;
+    const decisaoDaCopia = CATALOGO[dados.especie]?.escolha;
+    if (decisaoDaCopia && temOpcoes(decisaoDaCopia)) {
+      escolha.tipo = decisaoDaCopia;
+      return atualizar();
+    }
+  }
+  enviarJogada(escolha.carta, { ...escolha.dados, ...dados });
 }
 
 async function enviarJogada(carta, dadosDaEscolha) {
@@ -201,6 +236,7 @@ $('btn-cancelar').addEventListener('click', cancelar);
 $('btn-instrucoes').addEventListener('click', abrirInstrucoes);
 $('btn-ajuda').addEventListener('click', abrirInstrucoes);
 $('modal-fechar').addEventListener('click', fecharModal);
+$('fim-fechar').addEventListener('click', () => $('fim').classList.add('escondida'));
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') fecharModal(); });
 
 $('opt-previa').addEventListener('change', (e) => {
@@ -220,6 +256,7 @@ $('codigo').addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('modal').classList.contains('escondida')) return fecharModal();
+  if (!$('fim').classList.contains('escondida')) return $('fim').classList.add('escondida');
   esconderBalao();
   if (escolha) cancelar();
 });

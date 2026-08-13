@@ -58,19 +58,16 @@
 
   <!-- TELA 3: mesa -->
   <section class="tela escondida" id="tela-jogo">
-    <p class="vez" id="vez"></p>
-    <p class="aviso" id="aviso-jogo"></p>
-
-    <!-- Barra que aparece só quando a carta jogada pede uma decisão -->
-    <div class="escolha escondida" id="escolha">
-      <span id="escolha-texto"></span>
-      <div class="escolha-opcoes" id="escolha-opcoes"></div>
-      <button id="btn-cancelar" class="fantasma">Cancelar (Esc)</button>
+    <!-- Faixa fina: de quem é a vez, ou o que precisa ser decidido -->
+    <div class="faixa" id="faixa">
+      <span class="faixa-texto" id="vez"></span>
+      <span class="faixa-aviso" id="aviso-jogo"></span>
+      <button id="btn-cancelar" class="fantasma escondida">Cancelar (Esc)</button>
     </div>
 
     <div class="mesa">
       <div class="zona zona--bar">
-        <h2>Bar <span id="contagem-bar">0</span></h2>
+        <h2>Bar <span class="conta" id="contagem-bar">0</span></h2>
         <div class="cartas mini" id="bar"></div>
       </div>
 
@@ -80,7 +77,7 @@
           <div class="porta" title="Porta do bar"><span>ENTRADA</span></div>
           <div class="pista">
             <div class="cartas" id="fila"></div>
-            <!-- Prévia: aparece só ao passar o mouse numa carta da mão -->
+            <!-- Prévia: sobrepõe a fila, para não empurrar o resto da tela -->
             <div class="previa" id="previa">
               <span class="previa-rotulo">se jogar esta carta</span>
               <div class="previa-linha" id="previa-linha"></div>
@@ -90,22 +87,21 @@
       </div>
 
       <div class="zona zona--ralo">
-        <h2>Ralo <span id="contagem-ralo">0</span></h2>
+        <h2>Ralo <span class="conta" id="contagem-ralo">0</span></h2>
         <div class="cartas mini" id="ralo"></div>
       </div>
     </div>
 
     <div class="rodape">
-      <div>
-        <h2>Sua mão</h2>
+      <div class="bloco bloco--mao">
+        <h2>Sua mão <span class="dica" id="dica-mao"></span></h2>
         <div class="cartas" id="mao"></div>
-        <p class="dica" id="dica-mao"></p>
       </div>
-      <div>
+      <div class="bloco">
         <h2>Placar</h2>
         <ul class="placar" id="placar"></ul>
       </div>
-      <div>
+      <div class="bloco bloco--log">
         <h2>Últimas jogadas</h2>
         <ul class="log" id="log"></ul>
       </div>
@@ -121,6 +117,15 @@
   </div>
 
   <div class="balao escondida" id="balao"></div>
+
+  <!-- Comemoração do fim de partida -->
+  <div class="modal escondida" id="fim">
+    <div class="confete" id="confete"></div>
+    <div class="modal-caixa fim-caixa">
+      <div id="fim-conteudo"></div>
+      <button id="fim-fechar" class="principal">Ver o tabuleiro</button>
+    </div>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/socketClient.js"></script>

@@ -20,22 +20,28 @@ const { buscarAnimal, REGRAS } = require('./cards');
 const forcaDe = (carta) => buscarAnimal(carta.animal).forca;
 const nomeDe = (carta) => buscarAnimal(carta.animal).nome;
 
-// Cada linha do log guarda QUEM fez a acao, nao so o texto. E o que permite a
-// interface pintar "Crocodilo devorou Canguru" com a cor do dono do crocodilo,
-// mesmo que a acao tenha acontecido no turno de outro jogador.
-function registrar(estado, texto, dono = null) {
-  estado.log.push({ texto, dono });
-}
-
 // Concordancia: "1 animal" / "2 animais".
 const plural = (n, um, muitos) => `${n} ${n === 1 ? um : muitos}`;
 
-function paraORalo(estado, cartas, texto, dono) {
+// Cada linha do log e uma lista de PEDACOS. Os pedacos que representam uma carta
+// carregam o dono, e a interface pinta so aquele nome com a cor do jogador -
+// e assim da para ver de quem era o animal que foi devorado.
+const ficha = (carta) => ({ t: nomeDe(carta), dono: carta.dono });
+const txt = (t) => ({ t });
+const listaDe = (cartas) =>
+  cartas.flatMap((c, i) => (i === 0 ? [ficha(c)] : [txt(', '), ficha(c)]));
+
+// dono = quem executou a acao. Numa acao recorrente pode nao ser o jogador da vez.
+function registrar(estado, partes, dono = null) {
+  estado.log.push({ partes, dono });
+}
+
+function paraORalo(estado, cartas, partes, dono) {
   const alvos = cartas.filter(Boolean);
   if (alvos.length === 0) return;
   estado.fila = estado.fila.filter((c) => !alvos.includes(c));
   estado.ralo.push(...alvos);
-  if (texto) registrar(estado, texto, dono);
+  if (partes) registrar(estado, partes, dono);
 }
 
 function moverPara(estado, carta, destino) {
@@ -60,13 +66,18 @@ function poderGamba(estado, carta) {
     .slice(0, 2);
 
   const vitimas = alvosPossiveis.filter((c) => duasMaiores.includes(forcaDe(c)));
-  paraORalo(estado, vitimas, `Gambá fedeu e expulsou ${vitimas.map(nomeDe).join(', ')}.`, carta.dono);
+  paraORalo(
+    estado,
+    vitimas,
+    [ficha(carta), txt(' fedeu e expulsou '), ...listaDe(vitimas), txt('.')],
+    carta.dono
+  );
 }
 
 function poderPapagaio(estado, carta, escolha) {
   const alvo = estado.fila.find((c) => c.uid === escolha?.alvoUid);
   if (!alvo) return; // escolha invalida: o poder simplesmente nao acontece
-  paraORalo(estado, [alvo], `Papagaio enxotou ${nomeDe(alvo)}.`, carta.dono);
+  paraORalo(estado, [alvo], [ficha(carta), txt(' enxotou '), ficha(alvo), txt('.')], carta.dono);
 }
 
 function poderCanguru(estado, carta, escolha) {
@@ -75,7 +86,11 @@ function poderCanguru(estado, carta, escolha) {
   const destino = Math.max(0, i - pulos);
   if (destino === i) return;
   moverPara(estado, carta, destino);
-  registrar(estado, `Canguru pulou por cima de ${plural(i - destino, 'animal', 'animais')}.`, carta.dono);
+  registrar(
+    estado,
+    [ficha(carta), txt(` pulou por cima de ${plural(i - destino, 'animal', 'animais')}.`)],
+    carta.dono
+  );
 }
 
 function poderMacaco(estado, carta) {
@@ -95,7 +110,11 @@ function poderMacaco(estado, carta) {
 
   registrar(
     estado,
-    `Bando de macacos assumiu a frente${vitimas.length ? ` e expulsou ${vitimas.map(nomeDe).join(', ')}` : ''}.`,
+    [
+      txt('Bando de macacos assumiu a frente'),
+      ...(vitimas.length ? [txt(' e expulsou '), ...listaDe(vitimas)] : []),
+      txt('.'),
+    ],
     carta.dono
   );
 }
@@ -109,13 +128,13 @@ function poderCamaleao(estado, carta, escolha) {
   const presente = estado.fila.some((c) => c.animal === especie && c !== carta);
   if (!presente) return;
 
-  registrar(estado, `Camaleão imitou ${copiado.nome}.`, carta.dono);
+  registrar(estado, [ficha(carta), txt(` virou ${copiado.nome} (força ${copiado.forca}).`)], carta.dono);
   aplicarPoder(estado, carta, escolha, copiado.forca, especie);
 }
 
 function poderFoca(estado, carta) {
   estado.fila.reverse();
-  registrar(estado, 'Foca inverteu a fila inteira.', carta.dono);
+  registrar(estado, [ficha(carta), txt(' inverteu a fila inteira.')], carta.dono);
 }
 
 function poderZebra() {
@@ -129,13 +148,13 @@ function poderGirafa(estado, carta, escolha, forca) {
   if (forcaDe(frente) >= forca) return; // so ultrapassa quem e mais fraco
   estado.fila[i - 1] = carta;
   estado.fila[i] = frente;
-  registrar(estado, `Girafa passou na frente de ${nomeDe(frente)}.`, carta.dono);
+  registrar(estado, [ficha(carta), txt(' passou na frente de '), ficha(frente), txt('.')], carta.dono);
 }
 
 function poderCobra(estado, carta) {
   // Ordenacao estavel: animais de mesma forca mantem a ordem relativa.
   estado.fila.sort((a, b) => forcaDe(b) - forcaDe(a));
-  registrar(estado, 'Cobra reorganizou a fila por força.', carta.dono);
+  registrar(estado, [ficha(carta), txt(' reorganizou a fila por força.')], carta.dono);
 }
 
 function poderCrocodilo(estado, carta, escolha, forca) {
@@ -150,7 +169,7 @@ function poderCrocodilo(estado, carta, escolha, forca) {
     paraORalo(estado, [frente]);
   }
   if (comidos.length) {
-    registrar(estado, `Crocodilo devorou ${comidos.map(nomeDe).join(', ')}.`, carta.dono);
+    registrar(estado, [ficha(carta), txt(' devorou '), ...listaDe(comidos), txt('.')], carta.dono);
   }
 }
 
@@ -166,14 +185,27 @@ function poderHipopotamo(estado, carta, escolha, forca) {
     estado.fila[i] = frente;
     passou++;
   }
-  if (passou) registrar(estado, `Hipopótamo empurrou ${plural(passou, 'animal', 'animais')}.`, carta.dono);
+  if (passou) {
+    registrar(
+      estado,
+      [ficha(carta), txt(` empurrou ${plural(passou, 'animal', 'animais')}.`)],
+      carta.dono
+    );
+  }
 }
 
 function poderLeao(estado, carta) {
   // Dois leoes nao cabem na mesma fila: o recem-chegado vai pro ralo.
+  // Vale tambem para o camaleao que virou leao - enquanto ele age, ELE E um leao,
+  // com a forca e a sorte de um leao.
   const jaTemLeao = estado.fila.some((c) => c.animal === 'leao' && c !== carta);
-  if (carta.animal === 'leao' && jaTemLeao) {
-    paraORalo(estado, [carta], 'Já havia um leão na fila: o recém-chegado foi pro ralo.', carta.dono);
+  if (jaTemLeao) {
+    paraORalo(
+      estado,
+      [carta],
+      [ficha(carta), txt(' encarou o leão que já estava na fila e foi expulso pro ralo.')],
+      carta.dono
+    );
     return;
   }
   const macacos = estado.fila.filter((c) => c.animal === 'macaco');
@@ -181,7 +213,14 @@ function poderLeao(estado, carta) {
   moverPara(estado, carta, 0);
   registrar(
     estado,
-    `Leão assumiu a frente${macacos.length ? ` e espantou ${plural(macacos.length, 'macaco', 'macacos')}` : ''}.`,
+    [
+      ficha(carta),
+      txt(
+        ` assumiu a frente${
+          macacos.length ? ` e espantou ${plural(macacos.length, 'macaco', 'macacos')}` : ''
+        }.`
+      ),
+    ],
     carta.dono
   );
 }
@@ -231,10 +270,13 @@ function resolverPorta(estado) {
   estado.bar.push(...entram);
   estado.ralo.push(expulso);
 
-  registrar(
-    estado,
-    `Entraram no bar: ${entram.map(nomeDe).join(' e ')}. Sobrou pro ralo: ${nomeDe(expulso)}.`
-  );
+  registrar(estado, [
+    txt('Entraram no bar: '),
+    ...listaDe(entram),
+    txt('. Sobrou pro ralo: '),
+    ficha(expulso),
+    txt('.'),
+  ]);
   return { entram, expulso };
 }
 
