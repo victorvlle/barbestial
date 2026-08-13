@@ -1,0 +1,15 @@
+# Receita de publicacao no Render. Deixar isso versionado no repositorio
+# significa que a configuracao do servidor tambem tem historico - se um dia
+# algo mudar e quebrar, da para ver o que era antes.
+services:
+  - type: web
+    name: barbestial
+    runtime: node
+    plan: free
+    region: virginia # o mais perto do Brasil entre os disponiveis
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /saude
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

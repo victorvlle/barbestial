@@ -1,0 +1,30 @@
+{
+  "name": "barbestial",
+  "version": "0.1.0",
+  "description": "Versao digital multiplayer do jogo de cartas Bar Bestial",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "test:e2e": "node tests/e2e.js",
+    "test:ui": "node tests/navegador.js && node tests/melhorias.js"
+  },
+  "keywords": [
+    "jogo",
+    "cartas",
+    "multiplayer",
+    "socket.io"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
+  }
+}

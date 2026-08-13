@@ -1,0 +1,158 @@
+// Teste ponta a ponta: sobe o servidor de verdade e simula 2 jogadores por Socket.IO.
+//
+// Rode com:  npm run test:e2e
+// (precisa de socket.io-client, que esta em devDependencies - rode npm install antes)
+//
+// Diferente de npm test, que testa as regras em memoria, este aqui testa o caminho
+// completo: navegador -> socket -> handlers -> motor -> volta pros dois jogadores.
+const { io } = require('socket.io-client');
+const { spawn } = require('child_process');
+
+const PORTA = 3999;
+const url = `http://localhost:${PORTA}`;
+const raiz = require('path').join(__dirname, '..');
+const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+const pedir = (sock, ev, dados) => new Promise((r) => sock.emit(ev, dados, r));
+const esperarEvento = (sock, ev) => new Promise((r) => sock.once(ev, r));
+
+function check(cond, msg) {
+  console.log(`${cond ? 'ok   ' : 'FALHA'}  ${msg}`);
+  if (!cond) process.exitCode = 1;
+}
+
+(async () => {
+  await espera(1200);
+  const ana = io(url), bruno = io(url), estranho = io(url);
+  await espera(400);
+
+  // 1. Ana cria a sala
+  const criada = await pedir(ana, 'criar-sala', { jogadorId: 'ana', nome: 'Ana' });
+  check(criada.ok && /^[A-Z0-9]{4}$/.test(criada.sala.codigo), `Ana criou a sala ${criada.sala?.codigo}`);
+  const codigo = criada.sala.codigo;
+
+  // 2. Bruno entra e Ana é avisada em tempo real
+  const avisoParaAna = esperarEvento(ana, 'sala-atualizada');
+  const entrou = await pedir(bruno, 'entrar-sala', { codigo, jogadorId: 'bruno', nome: 'Bruno' });
+  check(entrou.ok, 'Bruno entrou na sala');
+  const salaVistaPelaAna = await avisoParaAna;
+  check(salaVistaPelaAna.jogadores.length === 2, 'Ana recebeu o aviso de que Bruno chegou');
+  check(salaVistaPelaAna.jogadores.map(j => j.cor).join() === 'vermelho,azul', 'cores diferentes atribuídas');
+
+  // 3. Código errado
+  const errado = await pedir(estranho, 'entrar-sala', { codigo: 'XXXX', jogadorId: 'x', nome: 'Estranho' });
+  check(!errado.ok && /não encontrada/.test(errado.erro), `código errado recusado: "${errado.erro}"`);
+
+  // 4. Quem não é anfitrião não começa
+  const tentativa = await pedir(bruno, 'iniciar-partida', {});
+  check(!tentativa.ok && /Só quem criou/.test(tentativa.erro), `Bruno não pode começar: "${tentativa.erro}"`);
+
+  // 5. Ana começa: os dois recebem o estado
+  const estadoAna = esperarEvento(ana, 'estado-atualizado');
+  const estadoBruno = esperarEvento(bruno, 'estado-atualizado');
+  const iniciou = await pedir(ana, 'iniciar-partida', {});
+  check(iniciou.ok, 'Ana começou a partida');
+  const [eA, eB] = [await estadoAna, await estadoBruno];
+  check(eA.jogadores.find(j => j.id === 'ana').mao.length === 4, 'Ana recebeu 4 cartas');
+  check(eA.jogadores.find(j => j.id === 'bruno').mao === undefined, 'Ana NÃO vê a mão do Bruno');
+  check(eB.jogadores.find(j => j.id === 'ana').mao === undefined, 'Bruno NÃO vê a mão da Ana');
+  check(eA.vezDe === 'ana', 'a vez é da Ana');
+
+  // 6. Ninguém entra em partida começada
+  const atrasado = await pedir(estranho, 'entrar-sala', { codigo, jogadorId: 'z', nome: 'Zeca' });
+  check(!atrasado.ok && /já começou/.test(atrasado.erro), `entrada tardia recusada: "${atrasado.erro}"`);
+
+  // 7. Uma jogada real, fora da vez e na vez
+  const foraDaVez = await pedir(bruno, 'jogar-carta', { uid: eB.jogadores.find(j => j.id==='bruno').mao[0].uid });
+  check(!foraDaVez.ok && /vez/.test(foraDaVez.erro), `jogada fora da vez recusada: "${foraDaVez.erro}"`);
+
+  const proximoEstado = esperarEvento(bruno, 'estado-atualizado');
+  const carta = eA.jogadores.find(j => j.id === 'ana').mao.find(c => !['papagaio','canguru','camaleao'].includes(c.animal));
+  const jogou = await pedir(ana, 'jogar-carta', { uid: carta.uid });
+  check(jogou.ok, `Ana jogou ${carta.animal}`);
+  const depois = await proximoEstado;
+  check(depois.fila.length === 1 && depois.fila[0].animal === carta.animal, 'a carta apareceu na fila dos dois');
+  check(depois.vezDe === 'bruno', 'a vez passou para o Bruno');
+
+  // 8. Reconexão: Ana cai e volta
+  ana.disconnect();
+  await espera(300);
+  const ana2 = io(url);
+  await espera(300);
+  const volta = await pedir(ana2, 'entrar-sala', { codigo, jogadorId: 'ana', nome: 'Ana' });
+  check(volta.ok && volta.sala.jogadores.length === 2, 'Ana reconectou e a partida continua');
+
+  // 9. A página é servida
+  const html = await fetch(url).then(r => r.text());
+  check(html.includes('Bar Bestial'), 'a página inicial é servida');
+  const api = await fetch(`${url}/api/animais`).then(r => r.json());
+  check(api.animais.length === 12, 'a API entrega os 12 animais para o cliente');
+
+  [bruno, estranho, ana2].forEach(s => s.disconnect());
+
+  // ---------------------------------------------------------------------
+  // PARTE 2: uma partida inteira, do inicio ao fim, so por socket.
+  // Simula exatamente o que main.js faz quando o jogador clica numa carta,
+  // inclusive as escolhas do papagaio, do canguru e do camaleao.
+  // ---------------------------------------------------------------------
+  console.log('');
+  const p1 = io(url), p2 = io(url);
+  await espera(400);
+
+  const estados = { p1: null, p2: null };
+  p1.on('estado-atualizado', (e) => { estados.p1 = e; });
+  p2.on('estado-atualizado', (e) => { estados.p2 = e; });
+
+  const nova = await pedir(p1, 'criar-sala', { jogadorId: 'p1', nome: 'Um' });
+  await pedir(p2, 'entrar-sala', { codigo: nova.sala.codigo, jogadorId: 'p2', nome: 'Dois' });
+  await pedir(p1, 'iniciar-partida', {});
+  await espera(300);
+
+  // Copia da logica do cliente: monta a escolha que a carta exige.
+  function escolhaPara(carta, estado) {
+    const catalogo = { papagaio: 'animal', canguru: 'pular1ou2', camaleao: 'especie' };
+    const tipo = catalogo[carta.animal];
+    if (!tipo || estado.fila.length === 0) return null;
+    if (tipo === 'animal') return { alvoUid: estado.fila[0].uid };
+    if (tipo === 'pular1ou2') return { pulos: 1 };
+    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'camaleao');
+    if (especies.length === 0) return null;
+    const dados = { especie: especies[0] };
+    if (especies[0] === 'papagaio') dados.alvoUid = estado.fila[0].uid;
+    if (especies[0] === 'canguru') dados.pulos = 1;
+    return dados;
+  }
+
+  let rodadas = 0;
+  let erroNaPartida = null;
+  while (rodadas < 40) {
+    const estado = estados.p1;
+    if (!estado || estado.fase === 'terminado') break;
+    const quem = estado.vezDe === 'p1' ? p1 : p2;
+    const visao = estado.vezDe === 'p1' ? estados.p1 : estados.p2;
+    const mao = visao.jogadores.find((j) => j.id === estado.vezDe).mao;
+    const carta = mao[Math.floor(rodadas * 7 % mao.length)]; // varia a carta escolhida
+    const r = await pedir(quem, 'jogar-carta', { uid: carta.uid, escolha: escolhaPara(carta, visao) });
+    if (!r.ok) { erroNaPartida = `${carta.animal}: ${r.erro}`; break; }
+    await espera(25);
+    rodadas++;
+  }
+
+  check(!erroNaPartida, `24 jogadas sem nenhuma recusa ${erroNaPartida ? '-> ' + erroNaPartida : ''}`);
+  check(rodadas === 24, `a partida durou exatamente 24 jogadas (foram ${rodadas})`);
+  const final = estados.p1;
+  check(final.fase === 'terminado', 'a partida terminou sozinha');
+  const total = final.bar.length + final.ralo.length + final.fila.length;
+  check(total === 24, `todas as 24 cartas estao no bar, no ralo ou na fila (${total})`);
+  check(Array.isArray(final.vencedores) && final.vencedores.length >= 1,
+    `vencedor anunciado: ${(final.vencedores || []).map(v => v.nome).join(', ')}`);
+  check(final.placar.reduce((s, p) => s + p.entraram, 0) === final.bar.length,
+    'o placar bate com o numero de animais dentro do bar');
+
+  [p1, p2].forEach(s => s.disconnect());
+  servidor.kill();
+  await espera(200);
+  process.exit(process.exitCode || 0);
+})().catch((e) => { console.error('EXPLODIU:', e); servidor.kill(); process.exit(1); });
+

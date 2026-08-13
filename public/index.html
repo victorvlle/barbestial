@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bar Bestial</title>
+  <!-- Ícone da aba, desenhado com um emoji em SVG: evita ter que criar um arquivo .ico -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topo">
+    <h1>Bar Bestial</h1>
+    <span id="conexao" class="selo selo--off">conectando…</span>
+    <button id="btn-ajuda" class="redondo" title="Instruções do jogo">?</button>
+  </header>
+
+  <!-- TELA 1: entrada -->
+  <section class="tela" id="tela-entrada">
+    <div class="painel">
+      <label for="nome">Seu nome</label>
+      <input id="nome" maxlength="16" placeholder="Como aparece pros outros" autocomplete="off" />
+
+      <button id="btn-criar" class="principal">Criar uma sala</button>
+
+      <div class="separador"><span>ou entre numa sala</span></div>
+
+      <div class="linha">
+        <input id="codigo" maxlength="4" placeholder="CÓDIGO" class="codigo-input" autocomplete="off" />
+        <button id="btn-entrar">Entrar</button>
+      </div>
+
+      <p class="aviso" id="aviso-entrada"></p>
+
+      <div class="opcoes">
+        <label class="alternador">
+          <input type="checkbox" id="opt-previa" checked />
+          <span>Mostrar prévia da jogada ao passar o mouse</span>
+        </label>
+        <button id="btn-instrucoes" class="secundario">Instruções</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TELA 2: sala de espera -->
+  <section class="tela escondida" id="tela-sala">
+    <div class="painel">
+      <p class="rotulo">Código da sala</p>
+      <p class="codigo-grande" id="codigo-sala">----</p>
+      <p class="dica">Passe esse código para quem vai jogar com você.</p>
+
+      <ul class="jogadores" id="lista-jogadores"></ul>
+
+      <button id="btn-comecar" class="principal">Começar partida</button>
+      <p class="aviso" id="aviso-sala"></p>
+    </div>
+  </section>
+
+  <!-- TELA 3: mesa -->
+  <section class="tela escondida" id="tela-jogo">
+    <p class="vez" id="vez"></p>
+    <p class="aviso" id="aviso-jogo"></p>
+
+    <!-- Barra que aparece só quando a carta jogada pede uma decisão -->
+    <div class="escolha escondida" id="escolha">
+      <span id="escolha-texto"></span>
+      <div class="escolha-opcoes" id="escolha-opcoes"></div>
+      <button id="btn-cancelar" class="fantasma">Cancelar (Esc)</button>
+    </div>
+
+    <div class="mesa">
+      <div class="zona zona--bar">
+        <h2>Bar <span id="contagem-bar">0</span></h2>
+        <div class="cartas mini" id="bar"></div>
+      </div>
+
+      <div class="zona zona--fila">
+        <h2>Fila</h2>
+        <div class="corredor">
+          <div class="porta" title="Porta do bar"><span>ENTRADA</span></div>
+          <div class="pista">
+            <div class="cartas" id="fila"></div>
+            <!-- Prévia: aparece só ao passar o mouse numa carta da mão -->
+            <div class="previa" id="previa">
+              <span class="previa-rotulo">se jogar esta carta</span>
+              <div class="previa-linha" id="previa-linha"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="zona zona--ralo">
+        <h2>Ralo <span id="contagem-ralo">0</span></h2>
+        <div class="cartas mini" id="ralo"></div>
+      </div>
+    </div>
+
+    <div class="rodape">
+      <div>
+        <h2>Sua mão</h2>
+        <div class="cartas" id="mao"></div>
+        <p class="dica" id="dica-mao"></p>
+      </div>
+      <div>
+        <h2>Placar</h2>
+        <ul class="placar" id="placar"></ul>
+      </div>
+      <div>
+        <h2>Últimas jogadas</h2>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Janela de instruções e a caixinha do "i" das cartas -->
+  <div class="modal escondida" id="modal">
+    <div class="modal-caixa">
+      <button class="fechar" id="modal-fechar" aria-label="Fechar">×</button>
+      <div id="modal-conteudo"></div>
+    </div>
+  </div>
+
+  <div class="balao escondida" id="balao"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/socketClient.js"></script>
+  <script src="/js/animacao.js"></script>
+  <script src="/js/render.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>
