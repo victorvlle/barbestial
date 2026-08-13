@@ -205,9 +205,11 @@ function renderizarJogo(estado, acoes = {}) {
   placar.innerHTML = '';
   for (const linha of estado.placar) {
     const li = document.createElement('li');
+    li.className = linha.id === estado.vezDe ? 'joga-agora' : '';
+    li.style.setProperty('--c', `var(--${linha.cor})`);
     li.innerHTML = `
       <span class="bolinha" style="background: var(--${linha.cor})"></span>
-      <span>${linha.nome}</span>
+      <span class="placar-nome">${linha.nome}</span>
       <span class="pontos">${linha.entraram}</span>`;
     placar.appendChild(li);
   }
@@ -431,7 +433,7 @@ function mostrarFimDeJogo(estado) {
     <p class="fim-quem" style="color: var(--${corVencedor})">${quem}</p>
     <p class="fim-motivo">${motivo}</p>
     <ul class="fim-placar">
-      <li class="fim-cabecalho"><span></span><span>jogador</span><span>no bar</span><span>desempate</span></li>
+      <li class="fim-cabecalho"><span></span><span>jogador</span><span>bar</span><span>desempate</span></li>
       ${linhas}
     </ul>`;
 
@@ -452,4 +454,30 @@ function soltarConfete(cor) {
     papel.style.transform = `rotate(${Math.random() * 360}deg)`;
     caixa.appendChild(papel);
   }
+}
+
+
+// A votação da revanche, visível para todos: cada um vê a decisão de cada um.
+function renderizarVotos(sala, meuId) {
+  const caixa = $('fim-votos');
+  if (!sala) return caixa.classList.add('escondida');
+
+  const estados = {
+    sim: { texto: 'quer jogar de novo', classe: 'voto--sim' },
+    nao: { texto: 'saiu', classe: 'voto--nao' },
+    null: { texto: 'decidindo…', classe: 'voto--esperando' },
+  };
+
+  caixa.innerHTML = `<p class="fim-esperando">Esperando os outros decidirem…</p>` +
+    sala.jogadores
+      .map((j) => {
+        const e = estados[j.revanche] || estados.null;
+        return `<div class="voto ${e.classe}">
+          <span class="bolinha" style="background: var(--${j.cor})"></span>
+          <span>${j.nome}${j.id === meuId ? ' (você)' : ''}</span>
+          <span class="voto-estado">${e.texto}</span>
+        </div>`;
+      })
+      .join('');
+  caixa.classList.remove('escondida');
 }

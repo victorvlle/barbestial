@@ -58,6 +58,9 @@
 
   <!-- TELA 3: mesa -->
   <section class="tela escondida" id="tela-jogo">
+    <!-- Placar sempre à vista, no topo e centralizado -->
+    <ul class="placar" id="placar"></ul>
+
     <!-- Faixa fina: de quem é a vez, ou o que precisa ser decidido -->
     <div class="faixa" id="faixa">
       <span class="faixa-texto" id="vez"></span>
@@ -97,10 +100,6 @@
         <h2>Sua mão <span class="dica" id="dica-mao"></span></h2>
         <div class="cartas" id="mao"></div>
       </div>
-      <div class="bloco">
-        <h2>Placar</h2>
-        <ul class="placar" id="placar"></ul>
-      </div>
       <div class="bloco bloco--log">
         <h2>Últimas jogadas</h2>
         <ul class="log" id="log"></ul>
@@ -123,7 +122,17 @@
     <div class="confete" id="confete"></div>
     <div class="modal-caixa fim-caixa">
       <div id="fim-conteudo"></div>
-      <button id="fim-fechar" class="principal">Ver o tabuleiro</button>
+
+      <!-- Enquanto a revanche é votada, todo mundo vê a decisão de todo mundo -->
+      <div class="fim-votos escondida" id="fim-votos"></div>
+
+      <div class="fim-botoes" id="fim-botoes">
+        <button id="btn-revanche" class="principal">Jogar de novo</button>
+        <button id="btn-sair" class="secundario">Ir para o menu principal</button>
+      </div>
+      <p class="fim-regra">A revanche só começa se todos toparem. Se alguém for
+        para o menu, a sala é encerrada para todos.</p>
+      <button id="fim-fechar" class="fantasma centrado">Ver o tabuleiro</button>
     </div>
   </div>
 

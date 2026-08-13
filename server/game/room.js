@@ -89,7 +89,48 @@ function iniciarPartida(codigo, jogadorId) {
   sala.estado = criarEstado(
     sala.jogadores.map((j) => ({ id: j.id, nome: j.nome, cor: j.cor }))
   );
+  sala.revanche = {};
   return sala;
+}
+
+// ------------------------------------------------------------------ revanche
+//
+// Regra combinada: a revanche so acontece se TODO MUNDO topar. Basta uma pessoa
+// dizer que nao quer e a sala inteira se desfaz - ninguem fica jogando sozinho
+// esperando, e ninguem fica presa numa sala que ja acabou.
+// Enquanto a votacao acontece, cada voto e visivel para todos.
+
+function votarRevanche(codigo, jogadorId, quer) {
+  const sala = salas.get(codigo);
+  if (!sala) throw new ErroDeSala('Sala não encontrada.');
+  if (!sala.estado || sala.estado.fase !== 'terminado') {
+    throw new ErroDeSala('A revanche só vale depois que a partida acaba.');
+  }
+
+  sala.revanche = sala.revanche || {};
+  sala.revanche[jogadorId] = quer ? 'sim' : 'nao';
+
+  if (!quer) return { acao: 'encerrada', sala, quemSaiu: jogadorId };
+
+  const presentes = sala.jogadores.filter((j) => j.conectado);
+  const todosToparam = presentes.every((j) => sala.revanche[j.id] === 'sim');
+
+  if (todosToparam && presentes.length >= REGRAS.MIN_JOGADORES) {
+    // Sala nova com a mesma gente: baralhos embaralhados de novo, placar zerado.
+    sala.jogadores = presentes;
+    sala.anfitriao = presentes[0].id;
+    sala.estado = criarEstado(
+      presentes.map((j) => ({ id: j.id, nome: j.nome, cor: j.cor }))
+    );
+    sala.revanche = {};
+    return { acao: 'nova-partida', sala };
+  }
+
+  return { acao: 'aguardando', sala };
+}
+
+function encerrarSala(codigo) {
+  salas.delete(codigo);
 }
 
 const salaPorCodigo = (codigo) => salas.get(codigo) || null;
@@ -112,7 +153,11 @@ function desconectar(socketId) {
   jogador.conectado = false;
   jogador.socketId = null;
 
-  if (!sala.estado) {
+  // Com a partida encerrada, sair e sair mesmo: nao faz sentido segurar o lugar
+  // de alguem numa partida que ja terminou.
+  const acabou = sala.estado && sala.estado.fase === 'terminado';
+
+  if (!sala.estado || acabou) {
     sala.jogadores = sala.jogadores.filter((j) => j.id !== jogador.id);
     if (sala.anfitriao === jogador.id && sala.jogadores.length > 0) {
       sala.anfitriao = sala.jogadores[0].id; // alguem precisa poder comecar a partida
@@ -138,12 +183,15 @@ function resumoDaSala(sala) {
       nome: j.nome,
       cor: j.cor,
       conectado: j.conectado,
+      revanche: (sala.revanche || {})[j.id] || null, // 'sim' | 'nao' | null
     })),
   };
 }
 
 module.exports = {
   salas,
+  votarRevanche,
+  encerrarSala,
   ErroDeSala,
   criarSala,
   entrarNaSala,

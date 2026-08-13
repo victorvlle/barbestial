@@ -114,6 +114,31 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   }
 
   check(await ana.locator('#fim').isVisible(), 'a comemoração de fim de jogo apareceu');
+  check(await ana.locator('#btn-revanche').isVisible(), 'com opção de jogar de novo');
+  check(await ana.locator('#btn-sair').isVisible(), 'e de ir para o menu principal');
+
+  // placar no topo, centralizado
+  const posPlacar = await ana.locator('#placar').evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    return { centro: Math.round(r.left + r.width / 2), meio: Math.round(window.innerWidth / 2), topo: Math.round(r.top) };
+  });
+  check(Math.abs(posPlacar.centro - posPlacar.meio) < 30, `o placar está centralizado no topo (${posPlacar.centro} vs ${posPlacar.meio}, y=${posPlacar.topo})`);
+
+  // revanche: Ana topa, Bruno topa -> partida nova
+  await ana.click('#btn-revanche');
+  await espera(600);
+  check(await ana.locator('#fim-votos').isVisible(), 'quem topou vê a votação em andamento');
+  const vistoPorBruno = await bruno.locator('#fim-votos').isVisible().catch(() => false);
+  await ana.screenshot({ path: path.join(raiz, 'shot-revanche.png') });
+
+  await bruno.click('#btn-revanche');
+  await espera(1200);
+  check(!(await ana.locator('#fim').isVisible()), 'com todos topando, começa uma partida nova');
+  check((await ana.locator('#mao .carta').count()) === 4, 'mãos novas de 4 cartas');
+  check((await ana.textContent('#placar')).includes('0'), 'placar zerado');
+
+  // agora um deles sai: a sala acaba para todo mundo
+  await espera(500);
   const textoFim = (await ana.textContent('#fim-conteudo')).replace(/\s+/g, ' ').trim();
   check(textoFim.length > 40, `explica o resultado: "${textoFim.slice(0, 100)}…"`);
   check((await ana.locator('#confete i').count()) > 10, 'com confete');

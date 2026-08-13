@@ -62,6 +62,10 @@ Passo 5a concluido: tema "bar noturno" e animacao das cartas quadro a quadro.
 Passo 5b concluido: silhuetas proprias em SVG no lugar dos emojis, na cor do dono.
 Passo 5c concluido: log colorido por autor, botao "i" nas cartas, previa da jogada
 e menu com instrucoes.
+Passo 8 concluido: placar no topo centralizado, mao com cartas maiores ocupando
+o bloco inteiro, revanche votada por todos (um "nao" encerra a sala) e a tela de
+fim com as opcoes de jogar de novo ou voltar ao menu.
+
 Passo 7 concluido: fila com a largura exata de 5 cartas, decisoes tomadas na
 propria carta da fila, aviso de vez, comemoracao final com o motivo do
 desempate, log com a cor do dono de cada animal, e a mesa inteira cabendo na

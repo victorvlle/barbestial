@@ -123,3 +123,48 @@ test('o resumo enviado ao lobby não vaza cartas nem socket', () => {
   assert.ok(!texto.includes('mao'), 'não pode expor a mão de ninguém');
   assert.strictEqual(resumo.emPartida, true);
 });
+
+// ------------------------------------------------------------- revanche
+
+function partidaTerminada() {
+  const s = sala.criarSala(jogador('a', 'Ana'));
+  sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
+  sala.iniciarPartida(s.codigo, 'a');
+  s.estado.fase = 'terminado';
+  return s;
+}
+
+test('a revanche só começa quando todos toparem', () => {
+  const s = partidaTerminada();
+  const primeiro = sala.votarRevanche(s.codigo, 'a', true);
+  assert.strictEqual(primeiro.acao, 'aguardando', 'com um voto só, ainda espera');
+  assert.strictEqual(sala.resumoDaSala(s).jogadores.find((j) => j.id === 'a').revanche, 'sim',
+    'o voto fica visível para todos');
+
+  const segundo = sala.votarRevanche(s.codigo, 'b', true);
+  assert.strictEqual(segundo.acao, 'nova-partida');
+  assert.strictEqual(s.estado.fase, 'jogando');
+  assert.strictEqual(s.estado.jogadores[0].mao.length, 4, 'mãos novas');
+  assert.strictEqual(s.estado.bar.length, 0, 'placar zerado');
+});
+
+test('um único "não" encerra a sala para todo mundo', () => {
+  const s = partidaTerminada();
+  sala.votarRevanche(s.codigo, 'a', true);
+  const r = sala.votarRevanche(s.codigo, 'b', false);
+  assert.strictEqual(r.acao, 'encerrada');
+  assert.strictEqual(r.quemSaiu, 'b');
+});
+
+test('quem desconecta depois do fim da partida sai da sala', () => {
+  const s = partidaTerminada();
+  sala.desconectar('socket-b');
+  assert.deepStrictEqual(s.jogadores.map((j) => j.id), ['a']);
+});
+
+test('revanche antes do fim da partida é recusada', () => {
+  const s = sala.criarSala(jogador('a', 'Ana'));
+  sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
+  sala.iniciarPartida(s.codigo, 'a');
+  assert.throws(() => sala.votarRevanche(s.codigo, 'a', true), /depois que a partida acaba/);
+});

@@ -75,6 +75,28 @@ module.exports = function registrarHandlers(io, socket) {
     }, resposta);
   });
 
+  // Revanche: todo mundo precisa topar. Um "nao" desfaz a sala inteira.
+  socket.on('revanche', ({ quer } = {}, resposta) => {
+    responder(() => {
+      const achado = sala.salaDoSocket(socket.id);
+      if (!achado) throw new sala.ErroDeSala('Você não está em nenhuma sala.');
+
+      const r = sala.votarRevanche(achado.sala.codigo, achado.jogador.id, Boolean(quer));
+
+      if (r.acao === 'encerrada') {
+        io.to(r.sala.codigo).emit('sala-encerrada', {
+          motivo: `${achado.jogador.nome} preferiu não jogar de novo. A sala foi encerrada.`,
+        });
+        sala.encerrarSala(r.sala.codigo);
+        return {};
+      }
+
+      avisarSala(io, r.sala);
+      if (r.acao === 'nova-partida') avisarEstado(io, r.sala);
+      return {};
+    }, resposta);
+  });
+
   socket.on('disconnect', () => {
     const saida = sala.desconectar(socket.id);
     if (saida && sala.salaPorCodigo(saida.sala.codigo)) avisarSala(io, saida.sala);

@@ -77,7 +77,12 @@ function poderGamba(estado, carta) {
 function poderPapagaio(estado, carta, escolha) {
   const alvo = estado.fila.find((c) => c.uid === escolha?.alvoUid);
   if (!alvo) return; // escolha invalida: o poder simplesmente nao acontece
-  paraORalo(estado, [alvo], [ficha(carta), txt(' enxotou '), ficha(alvo), txt('.')], carta.dono);
+  paraORalo(
+    estado,
+    [alvo],
+    [ficha(carta), txt(' mandou '), ficha(alvo), txt(' pro ralo.')],
+    carta.dono
+  );
 }
 
 function poderCanguru(estado, carta, escolha) {

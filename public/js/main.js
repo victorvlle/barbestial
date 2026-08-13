@@ -14,6 +14,8 @@ let escolha = null;
 let animando = false;
 let ultimaJogadaVista = -1;
 let comemorou = false;
+let ultimaSala = null;
+let votei = false;
 
 // ------------------------------------------------------------ conexao
 
@@ -32,9 +34,31 @@ socket.on('disconnect', () => {
 
 socket.on('sala-atualizada', (sala) => {
   salaAtual = sala.codigo;
+  ultimaSala = sala;
   renderizarSala(sala, JOGADOR_ID);
   if (!sala.emPartida) mostrarTela('sala');
+  // Se a janela de fim está aberta, atualiza os votos da revanche em tempo real.
+  if (!$('fim').classList.contains('escondida') && votei) {
+    renderizarVotos(sala, JOGADOR_ID);
+  }
 });
+
+// Alguém preferiu não jogar de novo: a sala acaba para todo mundo.
+socket.on('sala-encerrada', ({ motivo }) => {
+  salaAtual = null;
+  estadoAtual = null;
+  voltarAoMenu(motivo);
+});
+
+function voltarAoMenu(mensagem) {
+  votei = false;
+  comemorou = false;
+  ultimaJogadaVista = -1;
+  $('fim').classList.add('escondida');
+  mostrarTela('entrada');
+  avisar('aviso-entrada', mensagem || '');
+  document.title = 'Bar Bestial';
+}
 
 socket.on('estado-atualizado', async (estado) => {
   estadoAtual = estado;
@@ -52,7 +76,17 @@ socket.on('estado-atualizado', async (estado) => {
 
   if (estado.fase === 'terminado' && !comemorou) {
     comemorou = true;
+    votei = false;
+    $('fim-botoes').classList.remove('escondida');
+    $('fim-votos').classList.add('escondida');
     mostrarFimDeJogo(estado);
+  }
+
+  // Revanche aceita por todos: partida nova, janela de fim sai de cena.
+  if (estado.fase === 'jogando' && estado.jogadas === 0) {
+    comemorou = false;
+    votei = false;
+    $('fim').classList.add('escondida');
   }
 });
 
@@ -99,7 +133,7 @@ function opcaoDaCarta(carta, indice, total) {
   if (!escolha || !carta) return null;
 
   if (escolha.tipo === 'animal') {
-    return { rotulo: 'enxotar', escolha: { alvoUid: carta.uid }, chave: `alvo:${carta.uid}` };
+    return { rotulo: 'pro ralo', escolha: { alvoUid: carta.uid }, chave: `alvo:${carta.uid}` };
   }
 
   if (escolha.tipo === 'especie') {
@@ -237,6 +271,22 @@ $('btn-instrucoes').addEventListener('click', abrirInstrucoes);
 $('btn-ajuda').addEventListener('click', abrirInstrucoes);
 $('modal-fechar').addEventListener('click', fecharModal);
 $('fim-fechar').addEventListener('click', () => $('fim').classList.add('escondida'));
+
+$('btn-revanche').addEventListener('click', async () => {
+  votei = true;
+  $('fim-botoes').classList.add('escondida');
+  renderizarVotos(ultimaSala, JOGADOR_ID);
+  const r = await enviar('revanche', { quer: true });
+  if (!r.ok) {
+    votei = false;
+    $('fim-botoes').classList.remove('escondida');
+  }
+});
+
+$('btn-sair').addEventListener('click', async () => {
+  await enviar('revanche', { quer: false });
+  voltarAoMenu('Você saiu da sala.');
+});
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') fecharModal(); });
 
 $('opt-previa').addEventListener('change', (e) => {
