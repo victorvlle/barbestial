@@ -63,7 +63,9 @@
 
     <!-- Faixa fina: de quem é a vez, ou o que precisa ser decidido -->
     <div class="faixa" id="faixa">
+      <span class="relogio escondida" id="relogio"><span id="relogio-num">35</span>s</span>
       <span class="faixa-texto" id="vez"></span>
+      <span class="assistindo escondida" id="assistindo"></span>
       <span class="faixa-aviso" id="aviso-jogo"></span>
       <button id="btn-cancelar" class="fantasma escondida">Cancelar (Esc)</button>
 
@@ -108,7 +110,7 @@
 
     <div class="rodape">
       <div class="bloco bloco--mao">
-        <h2>Sua mão <span class="dica" id="dica-mao"></span></h2>
+        <h2>Sua mão <span class="baralho" id="baralho"></span> <span class="dica" id="dica-mao"></span></h2>
         <div class="cartas" id="mao"></div>
       </div>
       <!-- O player fica visível de propósito: ver o comentário em js/musica.js -->

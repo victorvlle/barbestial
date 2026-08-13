@@ -155,8 +155,31 @@ function renderizarJogo(estado, acoes = {}) {
   pintarTabuleiro(quadroFinal(estado), mapa, cores);
   esquecerCartas(new Set(mapa.keys()));
 
+  // Quantas cartas ainda faltam comprar, e quem está só assistindo
+  const eu = estado.jogadores.find((j) => j.id === estado.souEu);
+  const meuBaralho = eu?.cartasNoBaralho ?? 0;
+  $('baralho').textContent = estado.espectador
+    ? ''
+    : meuBaralho === 0
+      ? '· baralho vazio'
+      : `· ${meuBaralho} ${meuBaralho === 1 ? 'carta' : 'cartas'} para comprar`;
+
+  const quantos = estado.espectadores?.length || 0;
+  const assistindo = $('assistindo');
+  assistindo.classList.toggle('escondida', quantos === 0);
+  assistindo.textContent = quantos === 1 ? '1 assistindo' : `${quantos} assistindo`;
+  assistindo.title = (estado.espectadores || []).map((e) => e.nome).join(', ');
+
   const faixa = $('faixa');
-  if (estado.fase === 'terminado') {
+  if (estado.espectador) {
+    const daVezAgora = estado.jogadores.find((j) => j.id === estado.vezDe);
+    $('vez').innerHTML =
+      estado.fase === 'terminado'
+        ? `Fim de jogo — vitória de <strong>${(estado.vencedores || []).map((v) => v.nome).join(' e ')}</strong>`
+        : `<span class="selo-assiste">ASSISTINDO</span> vez de <strong style="color: var(--${cores[estado.vezDe]})">${daVezAgora ? daVezAgora.nome : '—'}</strong>`;
+    faixa.classList.remove('faixa--minha-vez');
+    document.title = 'Bar Bestial';
+  } else if (estado.fase === 'terminado') {
     const nomes = (estado.vencedores || []).map((v) => v.nome).join(' e ');
     $('vez').innerHTML = `Fim de jogo — vitória de <strong>${nomes}</strong>`;
     faixa.classList.remove('faixa--minha-vez');
@@ -196,6 +219,9 @@ function renderizarJogo(estado, acoes = {}) {
   }
   if (!acoes.emEscolha && !acoes.podeJogar) esconderPrevia();
 
+  // Espectador nao tem mao: o bloco some e o rodape se reorganiza (o CSS cuida
+  // das colunas a partir desta classe).
+  document.getElementById('tela-jogo').classList.toggle('assiste', Boolean(estado.espectador));
   $('dica-mao').textContent =
     estado.fase === 'terminado'
       ? 'Partida encerrada.'
@@ -253,7 +279,7 @@ function renderizarEscolha(escolha) {
   if (!escolha) return;
 
   const instrucoes = {
-    animal: 'Clique no animal da fila que você quer expulsar',
+    animal: 'Clique no animal da fila que você quer enxotar',
     especie: 'Clique no animal da fila que o camaleão vai virar',
     pular1ou2: 'Clique em até onde o canguru vai pular',
   };

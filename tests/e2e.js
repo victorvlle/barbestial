@@ -59,9 +59,19 @@ function check(cond, msg) {
   check(eB.jogadores.find(j => j.id === 'ana').mao === undefined, 'Bruno NÃO vê a mão da Ana');
   check(eA.vezDe === 'ana', 'a vez é da Ana');
 
-  // 6. Ninguém entra em partida começada
+  // 6. Quem chega com a partida em andamento entra como espectador
+  const espectadorEstado = esperarEvento(estranho, 'estado-atualizado');
   const atrasado = await pedir(estranho, 'entrar-sala', { codigo, jogadorId: 'z', nome: 'Zeca' });
-  check(!atrasado.ok && /já começou/.test(atrasado.erro), `entrada tardia recusada: "${atrasado.erro}"`);
+  check(atrasado.ok && atrasado.sala.espectadores.length === 1, 'quem chega tarde vira espectador');
+  const visaoDoEspectador = await espectadorEstado;
+  check(visaoDoEspectador.espectador === true, 'o espectador recebe o estado marcado como tal');
+  check(visaoDoEspectador.jogadores.every((j) => j.mao === undefined), 'e sem a mão de ninguém');
+
+  const proibido = await pedir(estranho, 'jogar-carta', {
+    uid: eA.jogadores.find((j) => j.id === 'ana').mao[0].uid,
+  });
+  check(!proibido.ok && /assistindo/.test(proibido.erro),
+    `espectador não consegue jogar: "${proibido.erro}"`);
 
   // 7. Uma jogada real, fora da vez e na vez
   const foraDaVez = await pedir(bruno, 'jogar-carta', { uid: eB.jogadores.find(j => j.id==='bruno').mao[0].uid });

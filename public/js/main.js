@@ -16,6 +16,7 @@ let ultimaJogadaVista = -1;
 let comemorou = false;
 let ultimaSala = null;
 let votei = false;
+let relogio = null;
 
 // ------------------------------------------------------------ conexao
 
@@ -51,6 +52,8 @@ socket.on('sala-encerrada', ({ motivo }) => {
 });
 
 function voltarAoMenu(mensagem) {
+  clearInterval(relogio);
+  $('relogio').classList.add('escondida');
   votei = false;
   comemorou = false;
   ultimaJogadaVista = -1;
@@ -62,6 +65,7 @@ function voltarAoMenu(mensagem) {
 
 socket.on('estado-atualizado', async (estado) => {
   estadoAtual = estado;
+  tocarRelogio(estado);
   escolha = null; // qualquer decisao pendente perde a validade quando a fila muda
   mostrarTela('jogo');
 
@@ -104,6 +108,31 @@ async function reproduzirJogada(estado) {
     await esperar(PAUSA_ENTRE_QUADROS);
   }
   animando = false;
+}
+
+// ------------------------------------------------------------ relógio
+
+// O servidor manda quanto tempo AINDA falta; a contagem regressiva acontece
+// aqui. Contar a partir do que sobrou evita depender do relógio do computador
+// de cada um estar certo.
+function tocarRelogio(estado) {
+  clearInterval(relogio);
+  const caixa = $('relogio');
+  if (!estado.turno || estado.fase !== 'jogando') return caixa.classList.add('escondida');
+
+  let restante = Math.ceil(estado.turno.restanteMs / 1000);
+  const pintar = () => {
+    $('relogio-num').textContent = Math.max(0, restante);
+    caixa.classList.toggle('urgente', restante <= 10);
+  };
+
+  caixa.classList.remove('escondida');
+  pintar();
+  relogio = setInterval(() => {
+    restante -= 1;
+    pintar();
+    if (restante <= 0) clearInterval(relogio);
+  }, 1000);
 }
 
 // ------------------------------------------------------------ a jogada

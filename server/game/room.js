@@ -38,6 +38,7 @@ function criarSala(jogador, aleatorio = Math.random) {
     codigo: gerarCodigo(aleatorio),
     anfitriao: jogador.id,
     jogadores: [],
+    espectadores: [], // quem chegou com a sala cheia ou com a partida rolando
     estado: null,
     criadaEm: Date.now(),
   };
@@ -53,8 +54,10 @@ function entrarNaSala(codigo, jogador) {
   const nome = String(jogador.nome || '').trim().slice(0, 16);
   if (!nome) throw new ErroDeSala('Escolha um nome antes de entrar.');
 
-  // Reconexao: o jogador ja estava nesta sala (caiu a internet, recarregou a pagina).
-  const jaEstava = sala.jogadores.find((j) => j.id === jogador.id);
+  sala.espectadores = sala.espectadores || [];
+
+  // Reconexao: a pessoa ja estava nesta sala (caiu a internet, recarregou a pagina).
+  const jaEstava = [...sala.jogadores, ...sala.espectadores].find((j) => j.id === jogador.id);
   if (jaEstava) {
     jaEstava.socketId = jogador.socketId;
     jaEstava.conectado = true;
@@ -62,9 +65,17 @@ function entrarNaSala(codigo, jogador) {
     return sala;
   }
 
-  if (sala.estado) throw new ErroDeSala('A partida desta sala já começou.');
-  if (sala.jogadores.length >= REGRAS.MAX_JOGADORES) {
-    throw new ErroDeSala(`A sala já tem ${REGRAS.MAX_JOGADORES} jogadores.`);
+  // Sala cheia ou partida em andamento: entra como espectador em vez de levar
+  // um "nao". Espectador ve a mesa, mas nao recebe mao nem pode jogar.
+  const semVaga = sala.jogadores.length >= REGRAS.MAX_JOGADORES;
+  if (sala.estado || semVaga) {
+    sala.espectadores.push({
+      id: jogador.id,
+      nome,
+      socketId: jogador.socketId,
+      conectado: true,
+    });
+    return sala;
   }
 
   sala.jogadores.push({
@@ -76,6 +87,9 @@ function entrarNaSala(codigo, jogador) {
   });
   return sala;
 }
+
+const ehEspectador = (sala, jogadorId) =>
+  (sala.espectadores || []).some((e) => e.id === jogadorId);
 
 function iniciarPartida(codigo, jogadorId) {
   const sala = salas.get(codigo);
@@ -138,7 +152,9 @@ const salaPorCodigo = (codigo) => salas.get(codigo) || null;
 function salaDoSocket(socketId) {
   for (const sala of salas.values()) {
     const jogador = sala.jogadores.find((j) => j.socketId === socketId);
-    if (jogador) return { sala, jogador };
+    if (jogador) return { sala, jogador, espectador: false };
+    const espectador = (sala.espectadores || []).find((e) => e.socketId === socketId);
+    if (espectador) return { sala, jogador: espectador, espectador: true };
   }
   return null;
 }
@@ -149,6 +165,13 @@ function desconectar(socketId) {
   const achado = salaDoSocket(socketId);
   if (!achado) return null;
   const { sala, jogador } = achado;
+
+  // Espectador que sai simplesmente some da lista: ele nao tem lugar guardado.
+  if (achado.espectador) {
+    sala.espectadores = sala.espectadores.filter((e) => e.id !== jogador.id);
+    if (sala.jogadores.every((j) => !j.conectado)) salas.delete(sala.codigo);
+    return { sala, jogador, espectador: true };
+  }
 
   jogador.conectado = false;
   jogador.socketId = null;
@@ -178,6 +201,7 @@ function resumoDaSala(sala) {
     emPartida: Boolean(sala.estado),
     minimo: REGRAS.MIN_JOGADORES,
     maximo: REGRAS.MAX_JOGADORES,
+    espectadores: (sala.espectadores || []).map((e) => ({ id: e.id, nome: e.nome })),
     jogadores: sala.jogadores.map((j) => ({
       id: j.id,
       nome: j.nome,
@@ -190,6 +214,7 @@ function resumoDaSala(sala) {
 
 module.exports = {
   salas,
+  ehEspectador,
   votarRevanche,
   encerrarSala,
   ErroDeSala,

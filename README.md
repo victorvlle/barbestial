@@ -62,6 +62,14 @@ Passo 5a concluido: tema "bar noturno" e animacao das cartas quadro a quadro.
 Passo 5b concluido: silhuetas proprias em SVG no lugar dos emojis, na cor do dono.
 Passo 5c concluido: log colorido por autor, botao "i" nas cartas, previa da jogada
 e menu com instrucoes.
+Passo 11 concluido: relogio de 35s por turno (o servidor joga sozinho se o tempo
+acabar; ajustavel pela variavel LIMITE_TURNO_MS), contador de cartas que faltam
+comprar, e espectadores - quem chega com a sala cheia ou a partida em andamento
+assiste sem receber mao nem previsao, e sem conseguir jogar.
+
+Sobre o gamba: ele NAO expulsa outros gambas. E a regra oficial ("but never
+other skunks"), conferida no manual. Com so gambas na fila, nada acontece.
+
 Passo 10 concluido: corrigido o bug das cores entre partidas (uid da carta agora
 inclui o id da partida, e a cor do dono e reaplicada a cada desenho), cartas
 maiores no bar e no ralo, e menu dentro da partida com instrucoes, musica e

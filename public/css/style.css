@@ -531,3 +531,33 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .menu-lista button:hover:not(:disabled) { background: #2b3446; filter: none; }
 .menu-lista .perigo { color: var(--vermelho); }
 .menu-aviso { color: var(--suave); font-size: .68rem; margin: .2rem .7rem .3rem; line-height: 1.35; }
+
+
+/* ------------------------------------------------- relógio, baralho, plateia */
+
+.relogio {
+  flex: none; min-width: 46px; text-align: center;
+  padding: .2rem .5rem; border-radius: 999px;
+  border: 1px solid var(--borda); background: #12161f;
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: .82rem;
+  color: var(--suave);
+}
+.relogio.urgente {
+  color: #23180a; background: var(--vermelho); border-color: transparent;
+  animation: chamar 1s ease-in-out infinite;
+}
+
+#tela-jogo.assiste .bloco--mao { display: none; }
+#tela-jogo.assiste .rodape { grid-template-columns: auto 1fr; }
+
+.baralho { font-size: .68rem; color: var(--neon); font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+.assistindo {
+  flex: none; padding: .16rem .6rem; border-radius: 999px;
+  border: 1px solid var(--borda); color: var(--suave); font-size: .72rem;
+}
+.selo-assiste {
+  display: inline-block; padding: .12rem .55rem; margin-right: .4rem;
+  border-radius: 999px; font-size: .7rem; font-weight: 800; letter-spacing: .1em;
+  background: #2b3446; color: var(--suave);
+}

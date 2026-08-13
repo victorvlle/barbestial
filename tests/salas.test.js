@@ -42,19 +42,49 @@ test('entrar sem nome é recusado', () => {
   assert.throws(() => sala.entrarNaSala(s.codigo, { id: 'b', nome: '   ' }), /nome/);
 });
 
-test('a sala não aceita um quinto jogador', () => {
+test('o quinto a chegar vira espectador', () => {
   const s = sala.criarSala(jogador('a', 'Ana'));
-  sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
-  sala.entrarNaSala(s.codigo, jogador('c', 'Caio'));
-  sala.entrarNaSala(s.codigo, jogador('d', 'Duda'));
-  assert.throws(() => sala.entrarNaSala(s.codigo, jogador('e', 'Edu')), /4 jogadores/);
+  for (const [id, nome] of [['b', 'Bruno'], ['c', 'Caio'], ['d', 'Duda']]) {
+    sala.entrarNaSala(s.codigo, jogador(id, nome));
+  }
+  sala.entrarNaSala(s.codigo, jogador('e', 'Edu'));
+  assert.strictEqual(s.jogadores.length, 4);
+  assert.deepStrictEqual(s.espectadores.map((e) => e.nome), ['Edu']);
+  assert.ok(sala.ehEspectador(s, 'e'));
 });
 
-test('ninguém novo entra depois que a partida começou', () => {
+test('quem chega com a partida em andamento vira espectador', () => {
   const s = sala.criarSala(jogador('a', 'Ana'));
   sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
   sala.iniciarPartida(s.codigo, 'a');
-  assert.throws(() => sala.entrarNaSala(s.codigo, jogador('c', 'Caio')), /já começou/);
+  sala.entrarNaSala(s.codigo, jogador('c', 'Caio'));
+  assert.strictEqual(s.jogadores.length, 2, 'não vira jogador');
+  assert.ok(sala.ehEspectador(s, 'c'));
+  assert.strictEqual(sala.resumoDaSala(s).espectadores.length, 1);
+});
+
+test('o espectador não recebe a mão de ninguém', () => {
+  const { estadoVisivelPara } = require('../server/game/gameState');
+  const s = sala.criarSala(jogador('a', 'Ana'));
+  sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
+  sala.iniciarPartida(s.codigo, 'a');
+  sala.entrarNaSala(s.codigo, jogador('c', 'Caio'));
+
+  const visao = estadoVisivelPara(s.estado, 'c', true);
+  assert.strictEqual(visao.espectador, true);
+  assert.ok(visao.jogadores.every((j) => j.mao === undefined), 'nenhuma mão vaza');
+  assert.deepStrictEqual(visao.previsoes, {}, 'nem a prévia das jogadas');
+  assert.ok(!JSON.stringify(visao).includes('baralho:'), 'nem o baralho de ninguém');
+});
+
+test('espectador que sai some da lista', () => {
+  const s = sala.criarSala(jogador('a', 'Ana'));
+  sala.entrarNaSala(s.codigo, jogador('b', 'Bruno'));
+  sala.iniciarPartida(s.codigo, 'a');
+  sala.entrarNaSala(s.codigo, jogador('c', 'Caio'));
+  sala.desconectar('socket-c');
+  assert.strictEqual(s.espectadores.length, 0);
+  assert.strictEqual(s.jogadores.length, 2, 'e os jogadores continuam');
 });
 
 test('quem já estava na sala consegue reconectar com outro socket', () => {
