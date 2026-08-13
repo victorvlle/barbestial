@@ -17,8 +17,11 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   const ana = await ctxA.newPage(), bruno = await ctxB.newPage();
   const erros = [];
   for (const [n, p] of [['Ana', ana], ['Bruno', bruno]]) {
-    p.on('pageerror', e => erros.push(`${n}: ${e.message}`));
-    p.on('console', m => m.type() === 'error' && erros.push(`${n} console: ${m.text()}`));
+    // O YouTube nao e alcancavel de dentro do container de teste. Falha de rede
+    // dele nao e bug do jogo - o que importa e o jogo continuar funcionando.
+    const doYoutube = (t) => /youtube|ytimg|iframe_api|ERR_TUNNEL/i.test(t);
+    p.on('pageerror', e => !doYoutube(e.message) && erros.push(`${n}: ${e.message}`));
+    p.on('console', m => m.type() === 'error' && !doYoutube(m.text()) && erros.push(`${n} console: ${m.text()}`));
   }
   await ana.goto(url); await bruno.goto(url); await espera(600);
 
@@ -84,6 +87,24 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(coloridas > 0, `${coloridas} de ${total} linhas do log têm a cor de quem agiu`);
   const cores = await ana.locator('#log li.com-dono').evaluateAll(els => [...new Set(els.map(e => getComputedStyle(e).borderLeftColor))]);
   check(cores.length >= 1, `cores presentes no log: ${cores.join(' | ')}`);
+
+  // música: bloco visível, botão de mudo funcionando e jogo intacto sem YouTube
+  check(await ana.locator('#bloco-musica').isVisible(), 'o bloco da música aparece na mesa');
+  const tamanho = await ana.locator('#player-musica').evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    return { l: Math.round(r.width), a: Math.round(r.height) };
+  });
+  check(tamanho.l >= 200 && tamanho.a >= 200,
+    `o player tem o tamanho mínimo exigido pelo YouTube (${tamanho.l}x${tamanho.a})`);
+
+  const antes = await ana.locator('#btn-mudo').evaluate((e) => e.classList.contains('mudo'));
+  await ana.click('#btn-mudo');
+  await espera(200);
+  const depois = await ana.locator('#btn-mudo').evaluate((e) => e.classList.contains('mudo'));
+  check(antes !== depois, 'o botão de mudo alterna');
+  await ana.click('#btn-mudo'); // volta ao estado anterior
+
+  check(!(await ana.locator('#tela-jogo').isHidden()), 'o jogo continua de pé mesmo sem o YouTube carregar');
 
   // tudo dentro da tela, sem rolagem da página
   const cabe = await ana.evaluate(() => ({

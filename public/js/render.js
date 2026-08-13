@@ -25,6 +25,8 @@ function mostrarTela(qual) {
   for (const tela of document.querySelectorAll('.tela')) {
     tela.classList.toggle('escondida', tela.id !== `tela-${qual}`);
   }
+  // A música só existe dentro da partida. Sair da mesa pausa; voltar retoma.
+  if (typeof tocar === 'function') (qual === 'jogo' ? tocar : parar)();
 }
 
 function avisar(elementoId, mensagem) {
@@ -251,7 +253,7 @@ function renderizarEscolha(escolha) {
   if (!escolha) return;
 
   const instrucoes = {
-    animal: 'Clique no animal da fila que você quer enxotar',
+    animal: 'Clique no animal da fila que você quer expulsar',
     especie: 'Clique no animal da fila que o camaleão vai virar',
     pular1ou2: 'Clique em até onde o canguru vai pular',
   };

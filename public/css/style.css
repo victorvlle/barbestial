@@ -325,7 +325,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ---------------------------------------------------------------- rodape */
 
-.rodape { flex: none; display: grid; grid-template-columns: auto 1fr; gap: .8rem; }
+.rodape { flex: none; display: grid; grid-template-columns: auto auto 1fr; gap: .8rem; }
 .bloco { padding: .7rem .8rem; border-radius: 14px; background: linear-gradient(180deg, #1d2431, var(--painel)); border: 1px solid var(--borda); min-height: 0; }
 /* Largura exata das 4 cartas da mao: nada de espaco sobrando ao lado delas */
 .bloco--mao { width: calc(4 * var(--mao-l) + 3 * var(--carta-gap) + 1.8rem); }
@@ -474,3 +474,31 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .voto--nao { border-color: rgba(224,82,99,.5); }
 .voto--nao .voto-estado { color: var(--vermelho); }
 .voto--esperando { opacity: .7; }
+
+
+/* ------------------------------------------------------------------ musica */
+
+/* 200x200 e o minimo que os termos do YouTube exigem para o player embutido, e
+   ele precisa estar visivel. A largura do bloco e o player MAIS o respiro das
+   bordas, senao o player encolhe abaixo do minimo. */
+.bloco--musica { width: calc(200px + 1.1rem); padding: .7rem .55rem; }
+.bloco--musica h2 { justify-content: space-between; margin-bottom: .4rem; }
+#player-musica, #player-musica iframe {
+  width: 200px !important; height: 200px !important;
+  border: 0; border-radius: 9px; overflow: hidden; background: #000;
+}
+.bloco--musica[data-erro] #player-musica::after {
+  content: attr(data-erro); display: grid; place-items: center; height: 100%;
+  color: var(--suave); font-size: .72rem; text-align: center; padding: .5rem;
+}
+
+#btn-mudo svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+#btn-mudo .alto-falante { fill: currentColor; stroke-linejoin: round; }
+#btn-mudo .corte { display: none; }
+#btn-mudo.mudo { color: var(--suave); border-color: var(--borda); }
+#btn-mudo.mudo .ondas { display: none; }
+#btn-mudo.mudo .corte { display: block; }
+
+@media (max-width: 1100px) {
+  .rodape { grid-template-columns: auto auto 1fr; }
+}

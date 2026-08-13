@@ -82,11 +82,12 @@ socket.on('estado-atualizado', async (estado) => {
     mostrarFimDeJogo(estado);
   }
 
-  // Revanche aceita por todos: partida nova, janela de fim sai de cena.
+  // Partida nova (primeira ou revanche): outra música, sorteada da playlist.
   if (estado.fase === 'jogando' && estado.jogadas === 0) {
     comemorou = false;
     votei = false;
     $('fim').classList.add('escondida');
+    sortearMusica();
   }
 });
 
@@ -289,6 +290,17 @@ $('btn-sair').addEventListener('click', async () => {
 });
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') fecharModal(); });
 
+function pintarBotaoMudo() {
+  const ligada = preferencias.musicaLigada();
+  $('btn-mudo').classList.toggle('mudo', !ligada);
+  $('btn-mudo').title = ligada ? 'Desligar a música' : 'Ligar a música';
+}
+
+$('btn-mudo').addEventListener('click', () => {
+  alternarMudo();
+  pintarBotaoMudo();
+});
+
 $('opt-previa').addEventListener('change', (e) => {
   preferencias.definirPrevia(e.target.checked);
   if (!e.target.checked) esconderPrevia();
@@ -314,6 +326,8 @@ document.addEventListener('keydown', (e) => {
 // ------------------------------------------------------------ inicializacao
 
 carregarCatalogo();
+carregarMusica();
+pintarBotaoMudo();
 $('nome').value = meuNome.ler();
 $('opt-previa').checked = preferencias.previaLigada();
 mostrarTela('entrada');

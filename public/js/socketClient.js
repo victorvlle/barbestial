@@ -24,6 +24,8 @@ function meuJogadorId() {
 const preferencias = {
   previaLigada: () => localStorage.getItem('barbestial:previa') !== 'nao',
   definirPrevia: (ligada) => localStorage.setItem('barbestial:previa', ligada ? 'sim' : 'nao'),
+  musicaLigada: () => localStorage.getItem('barbestial:musica') !== 'nao',
+  definirMusica: (ligada) => localStorage.setItem('barbestial:musica', ligada ? 'sim' : 'nao'),
 };
 
 const meuNome = {

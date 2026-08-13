@@ -34,9 +34,10 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
 
   const erros = [];
   for (const [nome, p] of [['Ana', ana], ['Bruno', bruno]]) {
-    p.on('pageerror', (e) => erros.push(`${nome}: ${e.message}`));
-    p.on('console', (m) => m.type() === 'error' && erros.push(`${nome} console: ${m.text()}`));
-    p.on('requestfailed', (r) => erros.push(`${nome} falhou: ${r.url()}`));
+    const doYoutube = (t) => /youtube|ytimg|iframe_api|ERR_TUNNEL/i.test(t);
+    p.on('pageerror', (e) => !doYoutube(e.message) && erros.push(`${nome}: ${e.message}`));
+    p.on('console', (m) => m.type() === 'error' && !doYoutube(m.text()) && erros.push(`${nome} console: ${m.text()}`));
+    p.on('requestfailed', (r) => !doYoutube(r.url()) && erros.push(`${nome} falhou: ${r.url()}`));
     p.on('response', (r) => { if (r.status() === 404) erros.push(`${nome} 404: ${r.url()}`); });
   }
 
