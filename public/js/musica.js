@@ -11,7 +11,7 @@
 // YouTube depois de "list=".
 const PLAYLIST = 'PLGvo0--QIK2kKnUO3L1FPBYqEPSksEBIz';
 
-const VOLUME = 30; // musica de fundo: baixa o suficiente para conversar por cima
+const VOLUME = 100; // musica de fundo: baixa o suficiente para conversar por cima
 
 let player = null;
 let pronto = false;
