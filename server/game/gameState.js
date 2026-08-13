@@ -12,10 +12,14 @@ function criarEstado(jogadores, aleatorio = Math.random) {
     throw new Error(`O jogo é para ${REGRAS.MIN_JOGADORES} a ${REGRAS.MAX_JOGADORES} jogadores.`);
   }
 
+  // Identifica esta partida. Entra no uid de cada carta - ver deck.js.
+  const partidaId = Math.floor(aleatorio() * 1e9).toString(36);
+
   return {
     fase: 'jogando',
+    partidaId,
     jogadores: jogadores.map((j, i) =>
-      prepararJogador({ id: j.id, nome: j.nome, cor: j.cor || CORES[i] }, aleatorio)
+      prepararJogador({ id: j.id, nome: j.nome, cor: j.cor || CORES[i] }, aleatorio, partidaId)
     ),
     vezDe: 0, // indice em jogadores
     fila: [], // fila[0] = colado na porta do bar

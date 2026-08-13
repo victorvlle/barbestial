@@ -97,6 +97,20 @@ module.exports = function registrarHandlers(io, socket) {
     }, resposta);
   });
 
+  // Sair no meio da partida encerra a sala: o jogo depende de todo mundo jogar
+  // a vez, entao continuar sem alguem so deixaria os outros travados esperando.
+  socket.on('sair-sala', (_dados, resposta) => {
+    responder(() => {
+      const achado = sala.salaDoSocket(socket.id);
+      if (!achado) return {};
+      io.to(achado.sala.codigo).emit('sala-encerrada', {
+        motivo: `${achado.jogador.nome} saiu da partida. A sala foi encerrada.`,
+      });
+      sala.encerrarSala(achado.sala.codigo);
+      return {};
+    }, resposta);
+  });
+
   socket.on('disconnect', () => {
     const saida = sala.desconectar(socket.id);
     if (saida && sala.salaPorCodigo(saida.sala.codigo)) avisarSala(io, saida.sala);

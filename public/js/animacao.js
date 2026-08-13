@@ -90,6 +90,10 @@ function posicionar(container, uids, mapaDeCartas, cores, criar, mini) {
     if (!carta) continue;
     const el = elementoDaCarta(carta, cores, criar);
     el.classList.toggle('carta--mini', Boolean(mini));
+    // A cor do dono e reaplicada SEMPRE, nao so quando o elemento e criado:
+    // um jogador pode ter outra cor numa partida seguinte, e o elemento
+    // reaproveitado ficaria com a cor velha.
+    el.style.setProperty('--cor-dono', `var(--${cores[carta.dono] || 'suave'})`);
     container.appendChild(el);
   }
 }

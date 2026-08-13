@@ -301,6 +301,40 @@ $('btn-mudo').addEventListener('click', () => {
   pintarBotaoMudo();
 });
 
+// ------------------------------------------------------------ menu da partida
+
+function abrirMenu(abrir) {
+  $('menu-lista').classList.toggle('escondida', !abrir);
+  if (abrir) $('menu-musica').textContent = preferencias.musicaLigada() ? 'Desligar a música' : 'Ligar a música';
+}
+
+$('btn-menu').addEventListener('click', (e) => {
+  e.stopPropagation();
+  abrirMenu($('menu-lista').classList.contains('escondida'));
+});
+
+$('menu-instrucoes').addEventListener('click', () => {
+  abrirMenu(false);
+  abrirInstrucoes();
+});
+
+$('menu-musica').addEventListener('click', () => {
+  alternarMudo();
+  pintarBotaoMudo();
+  abrirMenu(false);
+});
+
+$('menu-sair').addEventListener('click', async () => {
+  abrirMenu(false);
+  await enviar('sair-sala');
+  voltarAoMenu('Você saiu da partida.');
+});
+
+// Clicar em qualquer outro lugar fecha o menu.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu-jogo')) abrirMenu(false);
+});
+
 $('opt-previa').addEventListener('change', (e) => {
   preferencias.definirPrevia(e.target.checked);
   if (!e.target.checked) esconderPrevia();

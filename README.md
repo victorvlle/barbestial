@@ -62,6 +62,11 @@ Passo 5a concluido: tema "bar noturno" e animacao das cartas quadro a quadro.
 Passo 5b concluido: silhuetas proprias em SVG no lugar dos emojis, na cor do dono.
 Passo 5c concluido: log colorido por autor, botao "i" nas cartas, previa da jogada
 e menu com instrucoes.
+Passo 10 concluido: corrigido o bug das cores entre partidas (uid da carta agora
+inclui o id da partida, e a cor do dono e reaplicada a cada desenho), cartas
+maiores no bar e no ralo, e menu dentro da partida com instrucoes, musica e
+sair. Teste de regressao em tests/cores.js.
+
 Passo 9 concluido: musica de fundo do YouTube durante a partida, sorteada a cada
 partida nova, com botao de mudo. O player fica visivel de proposito - ver o
 comentario no topo de public/js/musica.js. A playlist e a constante PLAYLIST no

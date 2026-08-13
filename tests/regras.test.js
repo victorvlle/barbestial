@@ -270,3 +270,23 @@ test('o desempate explica o motivo', () => {
   assert.deepStrictEqual(r.vencedores.map((v) => v.id), ['b']);
   assert.strictEqual(r.empatados.length, 2);
 });
+
+// --------------------------------------------- identidade das cartas
+
+test('cada partida gera uids diferentes para as mesmas cartas', () => {
+  const jogadores = [{ id: 'a', nome: 'Ana' }, { id: 'b', nome: 'Bruno' }];
+  const primeira = criarEstado(jogadores);
+  const segunda = criarEstado(jogadores);
+
+  const uidsDaPrimeira = new Set(
+    primeira.jogadores.flatMap((j) => [...j.mao, ...j.baralho].map((c) => c.uid))
+  );
+  const repetidos = segunda.jogadores
+    .flatMap((j) => [...j.mao, ...j.baralho])
+    .filter((c) => uidsDaPrimeira.has(c.uid));
+
+  // Se repetissem, o navegador reaproveitaria o elemento da partida anterior -
+  // que foi o bug das cores erradas quando um jogador trocava de cor.
+  assert.strictEqual(repetidos.length, 0, 'nenhum uid pode se repetir entre partidas');
+  assert.notStrictEqual(primeira.partidaId, segunda.partidaId);
+});

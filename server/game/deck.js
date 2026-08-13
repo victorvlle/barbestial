@@ -4,9 +4,14 @@ const { ANIMAIS, REGRAS } = require('./cards');
 
 // Cada carta em jogo e um objeto unico. O uid identifica a carta sem ambiguidade
 // (o mesmo animal existe em 4 cores diferentes na mesa).
-function criarBaralho(donoId) {
+//
+// O id da PARTIDA entra no uid de proposito: sem ele, o leao do jogador X teria
+// o mesmo uid em todas as partidas, e o navegador - que reaproveita o elemento
+// da carta pelo uid para poder animar - acabaria reusando a carta da partida
+// anterior, com a cor antiga do jogador.
+function criarBaralho(donoId, partidaId) {
   return ANIMAIS.map((animal) => ({
-    uid: `${donoId}:${animal.id}`,
+    uid: `${partidaId}:${donoId}:${animal.id}`,
     animal: animal.id,
     dono: donoId,
   }));
@@ -24,8 +29,8 @@ function embaralhar(cartas, aleatorio = Math.random) {
 }
 
 // Baralho embaralhado + as 4 primeiras cartas na mao.
-function prepararJogador(jogador, aleatorio = Math.random) {
-  const baralho = embaralhar(criarBaralho(jogador.id), aleatorio);
+function prepararJogador(jogador, aleatorio = Math.random, partidaId = 'p') {
+  const baralho = embaralhar(criarBaralho(jogador.id, partidaId), aleatorio);
   return {
     ...jogador,
     mao: baralho.slice(0, REGRAS.CARTAS_NA_MAO),
