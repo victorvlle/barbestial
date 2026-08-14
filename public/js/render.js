@@ -48,10 +48,14 @@ function criarCarta(carta, cores) {
 
   // O clique no "i" nao pode virar uma jogada: paramos a propagacao aqui.
   // O listener e criado junto com a carta, uma unica vez - por isso nao empilha.
-  div.querySelector('.info').addEventListener('click', (evento) => {
+  const botaoInfo = div.querySelector('.info');
+  botaoInfo.addEventListener('click', (evento) => {
     evento.stopPropagation();
     mostrarBalao(evento.currentTarget, carta.animal);
   });
+  // Chegar perto do "i" ja tira a previa da frente: ela e informativa e nao
+  // pode competir com um botao.
+  botaoInfo.addEventListener('mouseenter', () => esconderPrevia());
   return div;
 }
 
