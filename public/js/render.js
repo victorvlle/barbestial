@@ -310,6 +310,15 @@ function mostrarPrevia(previsao, estado, mapaDeCartas, cores) {
     const bloco = document.createElement('div');
     bloco.className = `previa-grupo previa-grupo--${marca}`;
     bloco.title = titulo;
+
+    // A etiqueta vem ANTES das cartas: lê-se "entra no bar: [cartas]".
+    // Depois delas, ela era empurrada para fora da faixa e ficava por cima
+    // da última carta.
+    const etiqueta = document.createElement('span');
+    etiqueta.className = 'previa-etiqueta';
+    etiqueta.textContent = titulo;
+    bloco.appendChild(etiqueta);
+
     for (const uid of uids) {
       const carta = mapaDeCartas.get(uid);
       if (!carta) continue;
@@ -318,10 +327,6 @@ function mostrarPrevia(previsao, estado, mapaDeCartas, cores) {
       el.querySelector('.marcas')?.remove();
       bloco.appendChild(el);
     }
-    const etiqueta = document.createElement('span');
-    etiqueta.className = 'previa-etiqueta';
-    etiqueta.textContent = titulo;
-    bloco.appendChild(etiqueta);
     linha.appendChild(bloco);
   };
 

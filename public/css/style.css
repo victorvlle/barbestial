@@ -40,6 +40,10 @@
   /* A mao tem 4 cartas e um bloco so pra ela: cabem cartas maiores */
   --mao-l: 104px;
   --mao-a: 161px;
+  /* Cartas da previa: as menores de todas - ela e so um resumo do que vai
+     acontecer, e precisa caber numa faixa fina no alto da mesa */
+  --previa-l: 34px;
+  --previa-a: 53px;
 }
 
 * { box-sizing: border-box; }
@@ -191,6 +195,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 }
 
 .mesa {
+  position: relative; /* a previa se pendura no alto dela */
   flex: 1; min-height: 0;
   display: grid; grid-template-columns: 1fr auto 1fr; gap: .8rem;
   /* Bar e ralo ocupam a altura toda (eles enchem durante a partida e rolam por
@@ -336,23 +341,42 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    comparar "agora" e "depois" de um olhar, sem empurrar a tela (se ela
    empurrasse, a carta fugiria de baixo do cursor no momento do clique) e sem
    cobrir as cartas que precisam ser clicadas numa decisao. */
+/* A previa mora no ALTO da mesa, sobreposta a barra de status.
+   Ja esteve embaixo da fila e vivia sendo encoberta pelos blocos do rodape em
+   telas mais baixas - e nao havia altura sobrando ali para resolver. Em cima
+   sobra: a barra de status e fina e so aparece escondida enquanto o mouse esta
+   parado numa carta, que e justamente quando o jogador esta olhando a previa.
+   Deitada (rotulo a esquerda, cartas a direita) para ocupar pouca altura. */
 .previa {
-  position: absolute; top: calc(100% + .45rem); left: -.4rem; right: -.4rem;
-  z-index: 5; pointer-events: none; /* informativa: nunca rouba o clique */
-  border-radius: 10px; padding: .4rem .5rem;
-  background: rgba(16, 13, 9, .96);
+  position: absolute; bottom: calc(100% + .3rem);
+  left: 50%; transform: translateX(-50%);
+  max-width: min(1000px, 100%);
+  z-index: 22; /* acima do palco dos hologramas: e informacao, nao cenario */
+  pointer-events: none; /* informativa: nunca rouba o clique */
+  border-radius: 10px; padding: .2rem .55rem;
+  background: rgba(16, 13, 9, .97);
   border: 1px dashed rgba(242,177,52,.5);
-  box-shadow: 0 14px 30px rgba(0,0,0,.5);
-  display: flex; flex-direction: column; gap: .3rem;
+  box-shadow: 0 14px 34px rgba(0,0,0,.65);
+  display: flex; align-items: center; gap: .6rem;
   visibility: hidden; opacity: 0; transition: opacity .15s;
 }
+/* Cartas menores so aqui dentro: e um resumo, nao o tabuleiro. */
+.previa .carta--mini { width: var(--previa-l); height: var(--previa-a); }
+.previa .forca-mini { font-size: .6rem; padding: 0 .2rem; }
 .previa--ativa { visibility: visible; opacity: 1; }
-.previa-rotulo { font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; color: var(--neon); opacity: .8; }
-.previa-linha { display: flex; gap: .4rem; align-items: center; overflow-x: auto; }
-.previa-grupo { display: flex; align-items: center; gap: .25rem; padding: .25rem .4rem; border-radius: 8px; }
+.previa-rotulo {
+  flex: none; width: 4.6rem; line-height: 1.2;
+  font-size: .56rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--neon); opacity: .85;
+}
+.previa-linha { display: flex; gap: .4rem; align-items: center; overflow-x: auto; min-width: 0; }
+.previa-grupo { display: flex; align-items: center; gap: .2rem; padding: .15rem .35rem; border-radius: 8px; }
 .previa-grupo--entra { background: rgba(242,177,52,.14); border: 1px dashed rgba(242,177,52,.5); }
 .previa-grupo--sai { background: rgba(224,82,99,.14); border: 1px dashed rgba(224,82,99,.5); }
-.previa-etiqueta { font-size: .55rem; color: var(--suave); letter-spacing: .05em; }
+.previa-etiqueta {
+  flex: none; white-space: nowrap; /* uma linha so: a faixa e baixa */
+  font-size: .56rem; color: var(--suave); letter-spacing: .05em;
+}
 .previa-grupo--entra .previa-etiqueta { color: var(--neon); }
 .previa-grupo--sai .previa-etiqueta { color: var(--vermelho); }
 .carta--fantasma { opacity: .78; box-shadow: 0 0 0 3px var(--cor-dono); }

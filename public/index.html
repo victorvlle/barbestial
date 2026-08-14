@@ -87,6 +87,14 @@
     </div>
 
     <div class="mesa">
+      <!-- Prévia: uma faixa no alto da mesa, por cima da barra de status. Fica
+           aqui e não junto da fila porque embaixo ela era encoberta pelos
+           blocos do rodapé em telas mais baixas. -->
+      <div class="previa" id="previa">
+        <span class="previa-rotulo">se jogar esta carta</span>
+        <div class="previa-linha" id="previa-linha"></div>
+      </div>
+
       <div class="zona zona--bar">
         <h2>Bar <span class="conta" id="contagem-bar">0</span></h2>
         <div class="cartas mini" id="bar"></div>
@@ -98,11 +106,6 @@
           <div class="porta" title="Porta do bar"><span>ENTRADA</span></div>
           <div class="pista">
             <div class="cartas" id="fila"></div>
-            <!-- Prévia: sobrepõe a fila, para não empurrar o resto da tela -->
-            <div class="previa" id="previa">
-              <span class="previa-rotulo">se jogar esta carta</span>
-              <div class="previa-linha" id="previa-linha"></div>
-            </div>
           </div>
         </div>
       </div>

@@ -42,6 +42,24 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   await espera(500);
   check(await p.locator('#previa').evaluate((e) => e.classList.contains('previa--ativa')), 'a prévia aparece ao passar na carta');
 
+  // A prévia mora no alto da mesa. Embaixo da fila ela era engolida pelos
+  // blocos do rodapé numa janela baixa como esta - foi o que motivou a mudança.
+  const lugar = await p.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const pv = r('#previa');
+    const cruza = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return {
+      acimaDaMesa: Math.round(pv.bottom) <= Math.round(r('.mesa').top) + 2,
+      encostaNoRodape: cruza(pv, r('.rodape')),
+      cobreCartaDaFila: [...document.querySelectorAll('#fila .carta')].some((c) => cruza(pv, c.getBoundingClientRect())),
+      dentroDaTela: pv.top >= 0 && pv.bottom <= innerHeight,
+    };
+  });
+  check(lugar.acimaDaMesa, 'a prévia fica acima da mesa, não embaixo da fila');
+  check(!lugar.encostaNoRodape, 'a prévia não encosta nos blocos do rodapé');
+  check(!lugar.cobreCartaDaFila, 'a prévia não cobre nenhuma carta da fila');
+  check(lugar.dentroDaTela, 'a prévia cabe inteira na tela');
+
   // o "i" daquela carta esta realmente clicavel (ninguem por cima)?
   const alvoDoClique = await carta.locator('.info').evaluate((el) => {
     const r = el.getBoundingClientRect();
