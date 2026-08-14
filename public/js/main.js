@@ -97,16 +97,50 @@ socket.on('estado-atualizado', async (estado) => {
 
 // Mostra os passos do turno um a um: a carta chegando, o poder dela, as acoes
 // recorrentes e finalmente a porta do bar. Sem isso tudo acontece num piscar.
+//
+// A ordem dentro de cada passo importa: primeiro o HOLOGRAMA, depois o quadro.
+// O tubarão morde enquanto a vítima ainda está na fila e só então ela some -
+// se fosse ao contrário, a carta sumiria e o bicho morderia o vazio.
+//
+// Se a camada de holograma não existir ou falhar, este laço continua igual: o
+// jogo nunca depende dela para andar.
 async function reproduzirJogada(estado) {
   animando = true;
   atualizar(); // trava os cliques imediatamente
   const cores = Object.fromEntries(estado.jogadores.map((j) => [j.id, j.cor]));
   const mapa = mapearCartas(estado);
 
-  for (const quadro of estado.quadros.slice(0, -1)) {
-    pintarTabuleiro(quadroDaJogada(quadro, estado), mapa, cores);
-    await esperar(PAUSA_ENTRE_QUADROS);
+  const porQuadro =
+    typeof efeitosPorQuadro === 'function'
+      ? efeitosPorQuadro(estado.efeitos, estado.quadros.length)
+      : new Map();
+
+  // Devolve true quando alguma coisa foi encenada - o passo seguinte usa isso
+  // para encurtar a pausa. Um passo que ja teve holograma nao precisa dos 900ms
+  // de respiro: o jogador acabou de ver o que aconteceu, e o turno do proximo
+  // nao pode ficar esperando um teatro que ja terminou.
+  const encenar = async (i) => {
+    if (typeof reproduzirEfeitos !== 'function') return false;
+    const doQuadro = porQuadro.get(i);
+    if (!doQuadro || !doQuadro.length) return false;
+    try {
+      await reproduzirEfeitos(doQuadro, cores);
+      return true;
+    } catch (erro) {
+      console.warn('[holograma] quadro sem animação, seguindo o jogo:', erro);
+      return false;
+    }
+  };
+
+  for (let i = 0; i < estado.quadros.length - 1; i++) {
+    const encenou = await encenar(i);
+    pintarTabuleiro(quadroDaJogada(estado.quadros[i], estado), mapa, cores);
+    await esperar(encenou ? PAUSA_CURTA : PAUSA_ENTRE_QUADROS);
   }
+  // O último quadro é pintado pelo atualizar() logo depois desta função.
+  await encenar(estado.quadros.length - 1);
+
+  if (typeof limparPalco === 'function') limparPalco();
   animando = false;
 }
 
@@ -334,7 +368,9 @@ $('btn-mudo').addEventListener('click', () => {
 
 function abrirMenu(abrir) {
   $('menu-lista').classList.toggle('escondida', !abrir);
-  if (abrir) $('menu-musica').textContent = preferencias.musicaLigada() ? 'Desligar a música' : 'Ligar a música';
+  if (!abrir) return;
+  $('menu-musica').textContent = preferencias.musicaLigada() ? 'Desligar a música' : 'Ligar a música';
+  $('menu-holo').textContent = preferencias.holoLigado() ? 'Desligar os hologramas' : 'Ligar os hologramas';
 }
 
 $('btn-menu').addEventListener('click', (e) => {
@@ -353,6 +389,19 @@ $('menu-musica').addEventListener('click', () => {
   abrirMenu(false);
 });
 
+$('menu-holo').addEventListener('click', () => {
+  alternarHologramas(!preferencias.holoLigado());
+  abrirMenu(false);
+});
+
+// Um lugar so para ligar/desligar: o menu da partida e a caixinha do menu
+// inicial mexem na mesma preferencia e ficam sempre de acordo.
+function alternarHologramas(ligado) {
+  preferencias.definirHolo(ligado);
+  $('opt-holo').checked = ligado;
+  if (!ligado && typeof limparPalco === 'function') limparPalco();
+}
+
 $('menu-sair').addEventListener('click', async () => {
   abrirMenu(false);
   await enviar('sair-sala');
@@ -368,6 +417,8 @@ $('opt-previa').addEventListener('change', (e) => {
   preferencias.definirPrevia(e.target.checked);
   if (!e.target.checked) esconderPrevia();
 });
+
+$('opt-holo').addEventListener('change', (e) => alternarHologramas(e.target.checked));
 
 // Um clique em qualquer lugar fecha o balão do "i" (menos no próprio balão).
 document.addEventListener('click', (e) => {
@@ -391,6 +442,8 @@ document.addEventListener('keydown', (e) => {
 carregarCatalogo();
 carregarMusica();
 pintarBotaoMudo();
+iniciarPalco();
 $('nome').value = meuNome.ler();
 $('opt-previa').checked = preferencias.previaLigada();
+$('opt-holo').checked = preferencias.holoLigado();
 mostrarTela('entrada');

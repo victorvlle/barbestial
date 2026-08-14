@@ -15,6 +15,9 @@
 // contemplativo, diminua para acelerar. Sao o unico lugar a mexer.
 const DURACAO = 640; // ms que uma carta leva para deslizar ate o novo lugar
 const PAUSA_ENTRE_QUADROS = 900; // respiro entre um passo do turno e o proximo
+// Quando o passo ja teve holograma, o respiro e curto: o jogador acabou de ver
+// o que aconteceu e o proximo nao pode perder tempo do relogio dele esperando.
+const PAUSA_CURTA = 260;
 
 const cartasVivas = new Map(); // uid -> elemento HTML reaproveitado entre quadros
 

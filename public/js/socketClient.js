@@ -26,6 +26,10 @@ const preferencias = {
   definirPrevia: (ligada) => localStorage.setItem('barbestial:previa', ligada ? 'sim' : 'nao'),
   musicaLigada: () => localStorage.getItem('barbestial:musica') !== 'nao',
   definirMusica: (ligada) => localStorage.setItem('barbestial:musica', ligada ? 'sim' : 'nao'),
+  // Hologramas: ligados por padrao. Quem prefere a mesa limpa (ou tem um
+  // computador mais fraco) desliga aqui e o jogo roda exatamente igual.
+  holoLigado: () => localStorage.getItem('barbestial:holo') !== 'nao',
+  definirHolo: (ligado) => localStorage.setItem('barbestial:holo', ligado ? 'sim' : 'nao'),
 };
 
 const meuNome = {

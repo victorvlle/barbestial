@@ -32,6 +32,7 @@ function criarEstado(jogadores, aleatorio = Math.random) {
     ralo: [], // quem foi expulso
     log: [],
     quadros: [], // fotos do tabuleiro durante a ultima jogada, para animar
+    efeitos: [], // o que cada poder decidiu na ultima jogada - ver queue.js
     jogadas: 0, // contador: o cliente usa para saber se ha jogada nova para animar
     turnoIniciadoEm: Date.now(), // para o relogio de 35 segundos
     vencedores: null,
@@ -227,6 +228,7 @@ function estadoVisivelPara(estado, jogadorId, espectador = false) {
     bar: estado.bar,
     ralo: estado.ralo,
     quadros: estado.quadros || [],
+    efeitos: estado.efeitos || [],
     jogadas: estado.jogadas,
     log: estado.log.slice(-14),
     placar: placar(estado),

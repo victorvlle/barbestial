@@ -36,6 +36,34 @@ function registrar(estado, partes, dono = null) {
   estado.log.push({ partes, dono });
 }
 
+// ------------------------------------------------------------ efeitos
+//
+// O log e feito para OLHOS: frases em portugues. Os "efeitos" sao a mesma coisa
+// para MAQUINAS: uma anotacao do que cada poder decidiu, com os uids envolvidos.
+// A interface usa isso para escolher a animacao certa e saber em quem mirar.
+//
+// Regra de ouro deste arquivo: anotar NUNCA muda nada. As chamadas ficam DEPOIS
+// da decisao do poder, so descrevem o que ja foi decidido. Se apagarmos todas
+// elas, o jogo continua identico.
+//
+// "quadro" e o indice da foto do tabuleiro em que este efeito acontece: o
+// cliente reproduz a animacao logo antes de pintar aquele quadro, e assim o
+// holograma do tubarao aparece no mesmo instante em que a vitima some da fila.
+
+function anotarEfeito(estado, tipo, carta, alvos = [], extra = {}) {
+  if (!estado.efeitos) return; // tabuleiro de simulacao: nao precisa anotar
+  estado.efeitos.push({
+    tipo,
+    autor: carta ? carta.uid : null,
+    animal: carta ? carta.animal : null,
+    dono: carta ? carta.dono : null,
+    alvos: alvos.filter(Boolean).map((c) => c.uid),
+    alvoAnimais: alvos.filter(Boolean).map((c) => c.animal),
+    quadro: estado.quadros ? estado.quadros.length : 0,
+    ...extra,
+  });
+}
+
 function paraORalo(estado, cartas, partes, dono) {
   const alvos = cartas.filter(Boolean);
   if (alvos.length === 0) return;
@@ -66,6 +94,7 @@ function poderPorcoEspinho(estado, carta) {
     .slice(0, 2);
 
   const vitimas = alvosPossiveis.filter((c) => duasMaiores.includes(forcaDe(c)));
+  anotarEfeito(estado, 'porcoespinho', carta, vitimas);
   paraORalo(
     estado,
     vitimas,
@@ -77,6 +106,7 @@ function poderPorcoEspinho(estado, carta) {
 function poderTucano(estado, carta, escolha) {
   const alvo = estado.fila.find((c) => c.uid === escolha?.alvoUid);
   if (!alvo) return; // escolha invalida: o poder simplesmente nao acontece
+  anotarEfeito(estado, 'tucano', carta, [alvo]);
   paraORalo(
     estado,
     [alvo],
@@ -90,6 +120,10 @@ function poderCoelho(estado, carta, escolha) {
   const i = estado.fila.indexOf(carta);
   const destino = Math.max(0, i - pulos);
   if (destino === i) return;
+  // Quem o coelho pula: os animais entre o destino e a posicao atual.
+  anotarEfeito(estado, 'coelho', carta, estado.fila.slice(destino, i), {
+    pulos: i - destino,
+  });
   moverPara(estado, carta, destino);
   registrar(
     estado,
@@ -101,11 +135,18 @@ function poderCoelho(estado, carta, escolha) {
 function poderBabuino(estado, carta) {
   // A carta que esta agindo conta como babuíno (importa para o polvo copiando babuíno).
   const ehBabuino = (c) => c.animal === 'babuino' || c === carta;
-  if (estado.fila.filter(ehBabuino).length < 2) return; // babuíno sozinho nao faz nada
+  if (estado.fila.filter(ehBabuino).length < 2) {
+    // Babuíno sozinho nao faz nada - mas a animacao existe: ele provoca e nada acontece.
+    anotarEfeito(estado, 'babuino-solo', carta);
+    return;
+  }
 
   const vitimas = estado.fila.filter(
     (c) => c.animal === 'elefante' || c.animal === 'tubarao'
   );
+  anotarEfeito(estado, 'babuino-bando', carta, vitimas, {
+    bando: estado.fila.filter(ehBabuino).map((c) => c.uid),
+  });
   paraORalo(estado, vitimas);
 
   // O babuíno novo vai para a frente; os outros se juntam atras dele em ordem invertida.
@@ -134,16 +175,24 @@ function poderPovo(estado, carta, escolha) {
   if (!presente) return;
 
   registrar(estado, [ficha(carta), txt(` virou ${copiado.nome} (força ${copiado.forca}).`)], carta.dono);
+  // Duas anotacoes cercam a copia: o polvo VIRA a especie, ela age (os efeitos
+  // dela caem no meio), e no fim ele VOLTA a ser polvo.
+  anotarEfeito(estado, 'polvo', carta, [], { copiando: especie });
   aplicarPoder(estado, carta, escolha, copiado.forca, especie);
+  anotarEfeito(estado, 'polvo-volta', carta, [], { copiando: especie });
 }
 
 function poderPinguim(estado, carta) {
+  anotarEfeito(estado, 'pinguim', carta, estado.fila.filter((c) => c !== carta));
   estado.fila.reverse();
   registrar(estado, [ficha(carta), txt(' inverteu a fila inteira.')], carta.dono);
 }
 
-function poderCavalo() {
+function poderCavalo(estado, carta) {
   // O cavalo nao age: e uma barreira passiva. Tubarao e elefante o consultam.
+  // A anotacao abaixo so existe para a animacao de "plantou-se no lugar", e so
+  // no turno em que ele e jogado - repetir isso a cada turno cansaria a vista.
+  if (estado && estado.cartaJogada === carta) anotarEfeito(estado, 'cavalo', carta);
 }
 
 function poderPavao(estado, carta, escolha, forca) {
@@ -151,12 +200,14 @@ function poderPavao(estado, carta, escolha, forca) {
   if (i <= 0) return;
   const frente = estado.fila[i - 1];
   if (forcaDe(frente) >= forca) return; // so ultrapassa quem e mais fraco
+  anotarEfeito(estado, 'pavao', carta, [frente]);
   estado.fila[i - 1] = carta;
   estado.fila[i] = frente;
   registrar(estado, [ficha(carta), txt(' passou na frente de '), ficha(frente), txt('.')], carta.dono);
 }
 
 function poderAguia(estado, carta) {
+  anotarEfeito(estado, 'aguia', carta, estado.fila.filter((c) => c !== carta));
   // Ordenacao estavel: animais de mesma forca mantem a ordem relativa.
   estado.fila.sort((a, b) => forcaDe(b) - forcaDe(a));
   registrar(estado, [ficha(carta), txt(' reorganizou a fila por força.')], carta.dono);
@@ -164,47 +215,64 @@ function poderAguia(estado, carta) {
 
 function poderTubarao(estado, carta, escolha, forca) {
   const comidos = [];
+  let barrado = null;
   while (true) {
     const i = estado.fila.indexOf(carta);
     if (i <= 0) break;
     const frente = estado.fila[i - 1];
     // Para imediatamente diante de um mais forte OU de um cavalo.
-    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) break;
+    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) {
+      if (frente.animal === 'cavalo') barrado = frente;
+      break;
+    }
     comidos.push(frente);
     paraORalo(estado, [frente]);
   }
   if (comidos.length) {
+    // A ordem de "comidos" e a ordem real das mordidas: de tras para frente.
+    anotarEfeito(estado, 'tubarao', carta, comidos);
     registrar(estado, [ficha(carta), txt(' devorou '), ...listaDe(comidos), txt('.')], carta.dono);
   }
+  if (barrado) anotarEfeito(estado, 'bloqueio', barrado, [carta]);
 }
 
 function poderElefante(estado, carta, escolha, forca) {
   let passou = 0;
+  let barrado = null;
+  const empurrados = [];
   while (true) {
     const i = estado.fila.indexOf(carta);
     if (i <= 0) break;
     const frente = estado.fila[i - 1];
     // Nao passa outro elefante (forca igual), nem o lobo alfa (mais forte), nem o cavalo.
-    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) break;
+    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) {
+      if (frente.animal === 'cavalo') barrado = frente;
+      break;
+    }
+    empurrados.push(frente);
     estado.fila[i - 1] = carta;
     estado.fila[i] = frente;
     passou++;
   }
   if (passou) {
+    anotarEfeito(estado, 'elefante', carta, empurrados, { passou });
     registrar(
       estado,
       [ficha(carta), txt(` empurrou ${plural(passou, 'animal', 'animais')}.`)],
       carta.dono
     );
   }
+  if (barrado) anotarEfeito(estado, 'bloqueio', barrado, [carta]);
 }
 
 function poderLobo(estado, carta) {
   // Dois lobos alfa nao cabem na mesma alcateia: o recem-chegado vai pro ralo.
   // Vale tambem para o polvo que virou lobo alfa - enquanto ele age, ELE E um
   // lobo alfa, com a forca e a sorte de um.
-  const jaTemLobo = estado.fila.some((c) => c.animal === 'lobo' && c !== carta);
+  const outroLobo = estado.fila.find((c) => c.animal === 'lobo' && c !== carta);
+  const jaTemLobo = Boolean(outroLobo);
   if (jaTemLobo) {
+    anotarEfeito(estado, 'lobo-duelo', outroLobo, [carta]);
     paraORalo(
       estado,
       [carta],
@@ -214,6 +282,12 @@ function poderLobo(estado, carta) {
     return;
   }
   const babuinos = estado.fila.filter((c) => c.animal === 'babuino');
+  const i = estado.fila.indexOf(carta);
+  // Quem o lobo ultrapassa na corrida ate a porta - serve para a animacao mirar.
+  const ultrapassados = i > 0 ? estado.fila.slice(0, i) : [];
+  anotarEfeito(estado, 'lobo', carta, babuinos, {
+    ultrapassados: ultrapassados.map((c) => c.uid),
+  });
   paraORalo(estado, babuinos);
   moverPara(estado, carta, 0);
   registrar(
@@ -314,6 +388,8 @@ function fotografar(estado) {
 // pular direto para o resultado final.
 function jogarNaFila(estado, carta, escolha) {
   estado.quadros = [];
+  if (estado.efeitos) estado.efeitos = [];
+  estado.cartaJogada = carta; // so o cavalo consulta isso, e so para animar
 
   estado.fila.push(carta); // 1: a carta chega no fim da fila
   fotografar(estado);
@@ -327,6 +403,7 @@ function jogarNaFila(estado, carta, escolha) {
   const resultado = resolverPorta(estado); // 4: a porta do bar
   fotografar(estado);
 
+  estado.cartaJogada = null;
   return resultado;
 }
 
@@ -341,6 +418,7 @@ function simularJogada(estado, carta, escolha) {
     ralo: [...estado.ralo],
     log: [],
     quadros: [],
+    efeitos: null, // simulacao nao anota efeito nenhum: ninguem vai animar isso
   };
   jogarNaFila(faz_de_conta, carta, escolha);
   return {

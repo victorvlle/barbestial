@@ -37,6 +37,10 @@
           <input type="checkbox" id="opt-previa" checked />
           <span>Mostrar prévia da jogada ao passar o mouse</span>
         </label>
+        <label class="alternador">
+          <input type="checkbox" id="opt-holo" checked />
+          <span>Hologramas dos animais durante as jogadas</span>
+        </label>
         <button id="btn-instrucoes" class="secundario">Instruções</button>
       </div>
     </div>
@@ -75,6 +79,7 @@
         <div class="menu-lista escondida" id="menu-lista" role="menu">
           <button id="menu-instrucoes" role="menuitem">Instruções do jogo</button>
           <button id="menu-musica" role="menuitem">Desligar a música</button>
+          <button id="menu-holo" role="menuitem">Desligar os hologramas</button>
           <button id="menu-sair" role="menuitem" class="perigo">Sair da partida</button>
           <p class="menu-aviso">Sair encerra a sala para todos.</p>
         </div>
@@ -135,6 +140,10 @@
     </div>
   </section>
 
+  <!-- Palco dos hologramas: cobre a tela inteira, mas não recebe clique nenhum
+       (pointer-events: none no CSS). Fica acima das cartas e abaixo das janelas. -->
+  <div id="palco" aria-hidden="true"></div>
+
   <!-- Janela de instruções e a caixinha do "i" das cartas -->
   <div class="modal escondida" id="modal">
     <div class="modal-caixa">
@@ -168,6 +177,7 @@
   <script src="/js/socketClient.js"></script>
   <script src="/js/musica.js"></script>
   <script src="/js/animacao.js"></script>
+  <script src="/js/holograma.js"></script>
   <script src="/js/render.js"></script>
   <script src="/js/main.js"></script>
 </body>
