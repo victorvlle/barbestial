@@ -34,164 +34,164 @@ const ordem = (lista) => lista.map((c) => c.animal);
 
 // ------------------------------------------------------------------ poderes
 
-test('gambá expulsa as duas espécies mais fortes e nunca outros gambás', () => {
-  const estado = estadoCom('leao', 'crocodilo', 'papagaio', 'gamba');
-  soOPoder(estado, 'gamba');
-  assert.deepStrictEqual(ordem(estado.fila), ['papagaio', 'gamba', 'gamba']);
-  assert.deepStrictEqual(ordem(estado.ralo), ['leao', 'crocodilo']);
+test('porco-espinho expulsa as duas espécies mais fortes e nunca outros porcos-espinhos', () => {
+  const estado = estadoCom('lobo', 'tubarao', 'tucano', 'porcoespinho');
+  soOPoder(estado, 'porcoespinho');
+  assert.deepStrictEqual(ordem(estado.fila), ['tucano', 'porcoespinho', 'porcoespinho']);
+  assert.deepStrictEqual(ordem(estado.ralo), ['lobo', 'tubarao']);
 });
 
-test('papagaio manda pro ralo o animal escolhido', () => {
-  const estado = estadoCom('leao', 'zebra');
+test('tucano manda pro ralo o animal escolhido', () => {
+  const estado = estadoCom('lobo', 'cavalo');
   const alvo = estado.fila[0];
-  soOPoder(estado, 'papagaio', { alvoUid: alvo.uid });
-  assert.deepStrictEqual(ordem(estado.fila), ['zebra', 'papagaio']);
-  assert.deepStrictEqual(ordem(estado.ralo), ['leao']);
+  soOPoder(estado, 'tucano', { alvoUid: alvo.uid });
+  assert.deepStrictEqual(ordem(estado.fila), ['cavalo', 'tucano']);
+  assert.deepStrictEqual(ordem(estado.ralo), ['lobo']);
 });
 
-test('canguru pula um ou dois animais, conforme a escolha', () => {
-  const um = estadoCom('leao', 'zebra', 'foca');
-  soOPoder(um, 'canguru', { pulos: 1 });
-  assert.deepStrictEqual(ordem(um.fila), ['leao', 'zebra', 'canguru', 'foca']);
+test('coelho pula um ou dois animais, conforme a escolha', () => {
+  const um = estadoCom('lobo', 'cavalo', 'pinguim');
+  soOPoder(um, 'coelho', { pulos: 1 });
+  assert.deepStrictEqual(ordem(um.fila), ['lobo', 'cavalo', 'coelho', 'pinguim']);
 
-  const dois = estadoCom('leao', 'zebra', 'foca');
-  soOPoder(dois, 'canguru', { pulos: 2 });
-  assert.deepStrictEqual(ordem(dois.fila), ['leao', 'canguru', 'zebra', 'foca']);
+  const dois = estadoCom('lobo', 'cavalo', 'pinguim');
+  soOPoder(dois, 'coelho', { pulos: 2 });
+  assert.deepStrictEqual(ordem(dois.fila), ['lobo', 'coelho', 'cavalo', 'pinguim']);
 });
 
-test('macaco sozinho não faz nada', () => {
-  const estado = estadoCom('crocodilo', 'hipopotamo');
-  soOPoder(estado, 'macaco');
-  assert.deepStrictEqual(ordem(estado.fila), ['crocodilo', 'hipopotamo', 'macaco']);
+test('babuíno sozinho não faz nada', () => {
+  const estado = estadoCom('tubarao', 'elefante');
+  soOPoder(estado, 'babuino');
+  assert.deepStrictEqual(ordem(estado.fila), ['tubarao', 'elefante', 'babuino']);
   assert.strictEqual(estado.ralo.length, 0);
 });
 
-test('segundo macaco expulsa hipopótamos e crocodilos e o bando vai pra frente', () => {
-  // fila: macaco antigo, crocodilo, hipopotamo, zebra  -> chega o segundo macaco
-  const estado = estadoCom('macaco', 'crocodilo', 'hipopotamo', 'zebra');
-  soOPoder(estado, 'macaco');
-  assert.deepStrictEqual(ordem(estado.fila), ['macaco', 'macaco', 'zebra']);
-  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['crocodilo', 'hipopotamo']);
+test('segundo babuíno expulsa elefantes e tubarões e o bando vai pra frente', () => {
+  // fila: babuíno antigo, tubarão, elefante, cavalo  -> chega o segundo babuíno
+  const estado = estadoCom('babuino', 'tubarao', 'elefante', 'cavalo');
+  soOPoder(estado, 'babuino');
+  assert.deepStrictEqual(ordem(estado.fila), ['babuino', 'babuino', 'cavalo']);
+  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['elefante', 'tubarao']);
 });
 
-test('bando de macacos se junta atrás do novo em ordem invertida', () => {
-  const estado = estadoCom('macaco', 'zebra', 'macaco');
+test('bando de babuínos se junta atrás do novo em ordem invertida', () => {
+  const estado = estadoCom('babuino', 'cavalo', 'babuino');
   const antigoDaFrente = estado.fila[0];
-  const novo = soOPoder(estado, 'macaco');
+  const novo = soOPoder(estado, 'babuino');
   // o novo assume a frente; os antigos entram atras em ordem invertida
   assert.strictEqual(estado.fila[0], novo);
   assert.strictEqual(estado.fila[2], antigoDaFrente);
-  assert.deepStrictEqual(ordem(estado.fila), ['macaco', 'macaco', 'macaco', 'zebra']);
+  assert.deepStrictEqual(ordem(estado.fila), ['babuino', 'babuino', 'babuino', 'cavalo']);
 });
 
-test('camaleão só copia espécie que esteja na fila', () => {
-  const estado = estadoCom('girafa', 'foca'); // nao ha crocodilo para imitar
-  soOPoder(estado, 'camaleao', { especie: 'crocodilo' });
-  assert.deepStrictEqual(ordem(estado.fila), ['girafa', 'foca', 'camaleao']);
+test('polvo só copia espécie que esteja na fila', () => {
+  const estado = estadoCom('pavao', 'pinguim'); // nao ha tubarão para imitar
+  soOPoder(estado, 'polvo', { especie: 'tubarao' });
+  assert.deepStrictEqual(ordem(estado.fila), ['pavao', 'pinguim', 'polvo']);
   assert.strictEqual(estado.ralo.length, 0);
 });
 
-test('camaleão copiando crocodilo devora com força 10 e para no crocodilo real', () => {
-  const estado = estadoCom('crocodilo', 'papagaio', 'foca');
-  soOPoder(estado, 'camaleao', { especie: 'crocodilo' });
-  // devora foca(6) e papagaio(2); para diante do crocodilo real (forca igual)
-  assert.deepStrictEqual(ordem(estado.fila), ['crocodilo', 'camaleao']);
-  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['foca', 'papagaio']);
+test('polvo copiando tubarão devora com força 10 e para no tubarão real', () => {
+  const estado = estadoCom('tubarao', 'tucano', 'pinguim');
+  soOPoder(estado, 'polvo', { especie: 'tubarao' });
+  // devora pinguim(6) e tucano(2); para diante do tubarão real (forca igual)
+  assert.deepStrictEqual(ordem(estado.fila), ['tubarao', 'polvo']);
+  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['pinguim', 'tucano']);
 });
 
-test('camaleão imitando girafa ultrapassa um animal mais fraco', () => {
-  const estado = estadoCom('girafa', 'papagaio');
-  soOPoder(estado, 'camaleao', { especie: 'girafa' });
-  // camaleao vira forca 8 e passa o papagaio(2) que esta na frente dele
-  assert.deepStrictEqual(ordem(estado.fila), ['girafa', 'camaleao', 'papagaio']);
+test('polvo imitando pavão ultrapassa um animal mais fraco', () => {
+  const estado = estadoCom('pavao', 'tucano');
+  soOPoder(estado, 'polvo', { especie: 'pavao' });
+  // polvo vira forca 8 e passa o tucano(2) que esta na frente dele
+  assert.deepStrictEqual(ordem(estado.fila), ['pavao', 'polvo', 'tucano']);
 });
 
-test('foca inverte a fila inteira', () => {
-  const estado = estadoCom('leao', 'zebra', 'papagaio');
-  soOPoder(estado, 'foca');
-  assert.deepStrictEqual(ordem(estado.fila), ['foca', 'papagaio', 'zebra', 'leao']);
+test('pinguim inverte a fila inteira', () => {
+  const estado = estadoCom('lobo', 'cavalo', 'tucano');
+  soOPoder(estado, 'pinguim');
+  assert.deepStrictEqual(ordem(estado.fila), ['pinguim', 'tucano', 'cavalo', 'lobo']);
 });
 
-test('zebra impede o crocodilo de comer', () => {
-  const estado = estadoCom('papagaio', 'zebra');
-  soOPoder(estado, 'crocodilo');
-  assert.deepStrictEqual(ordem(estado.fila), ['papagaio', 'zebra', 'crocodilo']);
+test('cavalo impede o tubarão de comer', () => {
+  const estado = estadoCom('tucano', 'cavalo');
+  soOPoder(estado, 'tubarao');
+  assert.deepStrictEqual(ordem(estado.fila), ['tucano', 'cavalo', 'tubarao']);
   assert.strictEqual(estado.ralo.length, 0);
 });
 
-test('zebra impede o hipopótamo de ultrapassar', () => {
-  const estado = estadoCom('papagaio', 'zebra');
-  soOPoder(estado, 'hipopotamo');
-  assert.deepStrictEqual(ordem(estado.fila), ['papagaio', 'zebra', 'hipopotamo']);
+test('cavalo impede o elefante de ultrapassar', () => {
+  const estado = estadoCom('tucano', 'cavalo');
+  soOPoder(estado, 'elefante');
+  assert.deepStrictEqual(ordem(estado.fila), ['tucano', 'cavalo', 'elefante']);
 });
 
-test('girafa ultrapassa no máximo um animal por vez', () => {
-  const estado = estadoCom('papagaio', 'canguru');
-  soOPoder(estado, 'girafa');
-  assert.deepStrictEqual(ordem(estado.fila), ['papagaio', 'girafa', 'canguru']);
+test('pavão ultrapassa no máximo um animal por vez', () => {
+  const estado = estadoCom('tucano', 'coelho');
+  soOPoder(estado, 'pavao');
+  assert.deepStrictEqual(ordem(estado.fila), ['tucano', 'pavao', 'coelho']);
 });
 
-test('cobra ordena a fila por força, o mais forte na porta', () => {
-  const estado = estadoCom('papagaio', 'leao', 'foca');
-  soOPoder(estado, 'cobra');
-  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'cobra', 'foca', 'papagaio']);
+test('águia ordena a fila por força, o mais forte na porta', () => {
+  const estado = estadoCom('tucano', 'lobo', 'pinguim');
+  soOPoder(estado, 'aguia');
+  assert.deepStrictEqual(ordem(estado.fila), ['lobo', 'aguia', 'pinguim', 'tucano']);
 });
 
-test('crocodilo devora todos os mais fracos e para no mais forte', () => {
-  const estado = estadoCom('leao', 'papagaio', 'foca');
-  soOPoder(estado, 'crocodilo');
-  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'crocodilo']);
-  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['foca', 'papagaio']);
+test('tubarão devora todos os mais fracos e para no mais forte', () => {
+  const estado = estadoCom('lobo', 'tucano', 'pinguim');
+  soOPoder(estado, 'tubarao');
+  assert.deepStrictEqual(ordem(estado.fila), ['lobo', 'tubarao']);
+  assert.deepStrictEqual(ordem(estado.ralo).sort(), ['pinguim', 'tucano']);
 });
 
-test('hipopótamo não ultrapassa outro hipopótamo nem o leão', () => {
-  const comHipo = estadoCom('hipopotamo', 'papagaio');
-  soOPoder(comHipo, 'hipopotamo');
-  assert.deepStrictEqual(ordem(comHipo.fila), ['hipopotamo', 'hipopotamo', 'papagaio']);
+test('elefante não ultrapassa outro elefante nem o lobo alfa', () => {
+  const comHipo = estadoCom('elefante', 'tucano');
+  soOPoder(comHipo, 'elefante');
+  assert.deepStrictEqual(ordem(comHipo.fila), ['elefante', 'elefante', 'tucano']);
 
-  const comLeao = estadoCom('leao', 'papagaio');
-  soOPoder(comLeao, 'hipopotamo');
-  assert.deepStrictEqual(ordem(comLeao.fila), ['leao', 'hipopotamo', 'papagaio']);
+  const comLeao = estadoCom('lobo', 'tucano');
+  soOPoder(comLeao, 'elefante');
+  assert.deepStrictEqual(ordem(comLeao.fila), ['lobo', 'elefante', 'tucano']);
 });
 
-test('leão espanta todos os macacos e assume a frente', () => {
-  const estado = estadoCom('macaco', 'zebra', 'macaco');
-  soOPoder(estado, 'leao');
-  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'zebra']);
-  assert.deepStrictEqual(ordem(estado.ralo), ['macaco', 'macaco']);
+test('lobo alfa espanta todos os babuínos e assume a frente', () => {
+  const estado = estadoCom('babuino', 'cavalo', 'babuino');
+  soOPoder(estado, 'lobo');
+  assert.deepStrictEqual(ordem(estado.fila), ['lobo', 'cavalo']);
+  assert.deepStrictEqual(ordem(estado.ralo), ['babuino', 'babuino']);
 });
 
-test('segundo leão vai direto pro ralo', () => {
-  const estado = estadoCom('leao', 'zebra');
-  const novo = soOPoder(estado, 'leao');
-  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'zebra']);
+test('segundo lobo alfa vai direto pro ralo', () => {
+  const estado = estadoCom('lobo', 'cavalo');
+  const novo = soOPoder(estado, 'lobo');
+  assert.deepStrictEqual(ordem(estado.fila), ['lobo', 'cavalo']);
   assert.deepStrictEqual(estado.ralo, [novo]);
 });
 
 // ------------------------------------------------------- sequência do turno
 
 test('com 5 na fila: os 2 da frente entram no bar e o último vai pro ralo', () => {
-  const estado = estadoCom('leao', 'zebra', 'foca', 'papagaio', 'canguru');
+  const estado = estadoCom('lobo', 'cavalo', 'pinguim', 'tucano', 'coelho');
   const resultado = resolverPorta(estado);
-  assert.deepStrictEqual(ordem(estado.bar), ['leao', 'zebra']);
-  assert.deepStrictEqual(ordem(estado.ralo), ['canguru']);
-  assert.deepStrictEqual(ordem(estado.fila), ['foca', 'papagaio']);
+  assert.deepStrictEqual(ordem(estado.bar), ['lobo', 'cavalo']);
+  assert.deepStrictEqual(ordem(estado.ralo), ['coelho']);
+  assert.deepStrictEqual(ordem(estado.fila), ['pinguim', 'tucano']);
   assert.strictEqual(resultado.entram.length, 2);
 });
 
-test('ações recorrentes disparam depois da carta jogada: a foca invertida é devorada', () => {
-  // papagaio na frente, crocodilo atras. A foca inverte tudo e cai na boca do crocodilo.
-  const estado = estadoCom('papagaio', 'crocodilo');
-  jogarNaFila(estado, carta('foca'));
-  assert.deepStrictEqual(ordem(estado.fila), ['crocodilo', 'papagaio']);
-  assert.deepStrictEqual(ordem(estado.ralo), ['foca']);
+test('ações recorrentes disparam depois da carta jogada: o pinguim invertido é devorado', () => {
+  // tucano na frente, tubarao atras. O pinguim inverte tudo e cai na boca do tubarao.
+  const estado = estadoCom('tucano', 'tubarao');
+  jogarNaFila(estado, carta('pinguim'));
+  assert.deepStrictEqual(ordem(estado.fila), ['tubarao', 'tucano']);
+  assert.deepStrictEqual(ordem(estado.ralo), ['pinguim']);
 });
 
 test('a carta recém-jogada não repete a ação recorrente no mesmo turno', () => {
-  const estado = estadoCom('papagaio', 'canguru');
-  jogarNaFila(estado, carta('girafa'));
-  // girafa passou UM animal (canguru). Se agisse duas vezes, teria passado o papagaio tambem.
-  assert.deepStrictEqual(ordem(estado.fila), ['papagaio', 'girafa', 'canguru']);
+  const estado = estadoCom('tucano', 'coelho');
+  jogarNaFila(estado, carta('pavao'));
+  // pavão passou UM animal (coelho). Se agisse duas vezes, teria passado o tucano tambem.
+  assert.deepStrictEqual(ordem(estado.fila), ['tucano', 'pavao', 'coelho']);
 });
 
 // ------------------------------------------------------------ partida inteira
@@ -236,35 +236,35 @@ test('partida completa termina, sem perder nem duplicar cartas', () => {
 
 test('desempate é pela menor soma de forças', () => {
   const estado = criarEstado([{ id: 'a', nome: 'Ana' }, { id: 'b', nome: 'Bruno' }]);
-  estado.bar = [carta('leao', 'a'), carta('papagaio', 'b')];
+  estado.bar = [carta('lobo', 'a'), carta('tucano', 'b')];
   const { calcularVencedores } = require('../server/game/gameState');
   const vencedores = calcularVencedores(estado);
   assert.deepStrictEqual(vencedores.map((v) => v.id), ['b']); // 1 x 1, mas 2 < 12
 });
 
-// ------------------------------------------------- camaleão virando leão
+// ------------------------------------------------- polvo virando lobo alfa
 
-test('camaleão que imita o leão sofre a regra dos dois leões e vai pro ralo', () => {
-  const estado = estadoCom('leao', 'zebra');
-  const camaleao = soOPoder(estado, 'camaleao', { especie: 'leao' });
-  // Enquanto age, ele É um leão: com outro leão na fila, é expulso.
-  assert.deepStrictEqual(ordem(estado.fila), ['leao', 'zebra']);
-  assert.deepStrictEqual(estado.ralo, [camaleao]);
+test('polvo que imita o lobo alfa sofre a regra dos dois lobos alfa e vai pro ralo', () => {
+  const estado = estadoCom('lobo', 'cavalo');
+  const polvo = soOPoder(estado, 'polvo', { especie: 'lobo' });
+  // Enquanto age, ele É um lobo alfa: com outro lobo alfa na fila, é expulso.
+  assert.deepStrictEqual(ordem(estado.fila), ['lobo', 'cavalo']);
+  assert.deepStrictEqual(estado.ralo, [polvo]);
 });
 
-test('camaleão imitando leão sem outro leão na fila assume a frente', () => {
-  // sem leão na fila não há o que imitar, então usamos uma fila com leão E o efeito
-  const estado = estadoCom('macaco', 'leao');
-  const camaleao = soOPoder(estado, 'camaleao', { especie: 'leao' });
-  // há um leão na fila, então o camaleão-leão é expulso (mesma regra acima)
-  assert.ok(estado.ralo.includes(camaleao));
-  assert.ok(ordem(estado.fila).includes('macaco'), 'o macaco não é espantado por um leão expulso');
+test('polvo imitando lobo alfa sem outro lobo alfa na fila assume a frente', () => {
+  // sem lobo alfa na fila não há o que imitar, então usamos uma fila com lobo alfa E o efeito
+  const estado = estadoCom('babuino', 'lobo');
+  const polvo = soOPoder(estado, 'polvo', { especie: 'lobo' });
+  // há um lobo alfa na fila, então o polvo-lobo alfa é expulso (mesma regra acima)
+  assert.ok(estado.ralo.includes(polvo));
+  assert.ok(ordem(estado.fila).includes('babuino'), 'o babuíno não é espantado por um lobo alfa expulso');
 });
 
 test('o desempate explica o motivo', () => {
   const { calcularResultado } = require('../server/game/gameState');
   const estado = criarEstado([{ id: 'a', nome: 'Ana' }, { id: 'b', nome: 'Bruno' }]);
-  estado.bar = [carta('leao', 'a'), carta('papagaio', 'b')];
+  estado.bar = [carta('lobo', 'a'), carta('tucano', 'b')];
   const r = calcularResultado(estado);
   assert.strictEqual(r.criterio, 'forca');
   assert.deepStrictEqual(r.vencedores.map((v) => v.id), ['b']);

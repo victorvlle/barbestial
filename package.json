@@ -11,7 +11,7 @@
     "dev": "node --watch server/index.js",
     "test": "node --test",
     "test:e2e": "node tests/e2e.js && node tests/relogio.js",
-    "test:ui": "node tests/navegador.js && node tests/melhorias.js && node tests/cores.js && node tests/espectador.js"
+    "test:ui": "node tests/navegador.js && node tests/melhorias.js && node tests/cores.js && node tests/espectador.js && node tests/artes.js"
   },
   "keywords": [
     "jogo",

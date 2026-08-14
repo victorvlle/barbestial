@@ -62,13 +62,36 @@ Passo 5a concluido: tema "bar noturno" e animacao das cartas quadro a quadro.
 Passo 5b concluido: silhuetas proprias em SVG no lugar dos emojis, na cor do dono.
 Passo 5c concluido: log colorido por autor, botao "i" nas cartas, previa da jogada
 e menu com instrucoes.
+Passo 13 concluido: as 12 artes novas entraram (public/assets/cartas/<id>.webp).
+A carta na tela E a imagem: numero e nome saem impressos na propria arte, entao
+o codigo nao desenha mais nenhum dos dois por cima. A cor do jogador virou um
+anel em volta da carta. A arte antiga (animais.svg) foi removida do projeto.
+Corrigido tambem: a carta 5 chama-se POLVO (o "Povo" foi um engano de digitacao).
+
+Se um dia trocar uma arte, so troque o arquivo em public/assets/cartas/ - o nome
+do arquivo e o id do animal em cards.js. A proporcao usada e 0.644 e esta nas
+variaveis --carta-l/--carta-a do style.css; mudar a proporcao da arte pede
+ajustar essas variaveis, senao a imagem estica.
+
+Passo 12 concluido: os 12 animais foram renomeados (tema proprio). A tabela
+de-para esta em server/game/cards.js.
+
+  Gamba -> Porco-Espinho    Foca      -> Pinguim
+  Papagaio -> Tucano        Zebra     -> Cavalo
+  Canguru -> Coelho         Girafa    -> Pavao
+  Macaco -> Babuino         Cobra     -> Aguia
+  Camaleao -> Polvo         Crocodilo -> Tubarao
+                            Hipopotamo-> Elefante
+                            Leao      -> Lobo Alfa
+
 Passo 11 concluido: relogio de 35s por turno (o servidor joga sozinho se o tempo
 acabar; ajustavel pela variavel LIMITE_TURNO_MS), contador de cartas que faltam
 comprar, e espectadores - quem chega com a sala cheia ou a partida em andamento
 assiste sem receber mao nem previsao, e sem conseguir jogar.
 
-Sobre o gamba: ele NAO expulsa outros gambas. E a regra oficial ("but never
-other skunks"), conferida no manual. Com so gambas na fila, nada acontece.
+Sobre o porco-espinho (era o gamba no jogo original): ele NAO espeta outros
+porcos-espinhos. E a regra oficial ("but never other skunks"), conferida no
+manual. Com so porcos-espinhos na fila, nada acontece.
 
 Passo 10 concluido: corrigido o bug das cores entre partidas (uid da carta agora
 inclui o id da partida, e a cor do dono e reaplicada a cada desenho), cartas
@@ -87,7 +110,7 @@ fim com as opcoes de jogar de novo ou voltar ao menu.
 Passo 7 concluido: fila com a largura exata de 5 cartas, decisoes tomadas na
 propria carta da fila, aviso de vez, comemoracao final com o motivo do
 desempate, log com a cor do dono de cada animal, e a mesa inteira cabendo na
-tela. Corrigido: o camaleao que vira leao agora sofre a regra dos dois leoes.
+tela. Corrigido: o povo que vira lobo alfa agora sofre a regra dos dois lobos.
 
 Passo 6: publicacao preparada (render.yaml, rota /saude, engines no package.json).
 

@@ -5,7 +5,7 @@ const { ANIMAIS, REGRAS } = require('./cards');
 // Cada carta em jogo e um objeto unico. O uid identifica a carta sem ambiguidade
 // (o mesmo animal existe em 4 cores diferentes na mesa).
 //
-// O id da PARTIDA entra no uid de proposito: sem ele, o leao do jogador X teria
+// O id da PARTIDA entra no uid de proposito: sem ele, o lobo do jogador X teria
 // o mesmo uid em todas as partidas, e o navegador - que reaproveita o elemento
 // da carta pelo uid para poder animar - acabaria reusando a carta da partida
 // anterior, com a cor antiga do jogador.

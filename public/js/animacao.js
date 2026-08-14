@@ -7,8 +7,8 @@
 //            visualmente no lugar antigo
 //   Play   - remove o transform com transicao; o navegador anima a diferenca
 //
-// A vantagem: nao precisamos programar cada movimento (empurrao do hipopotamo,
-// inversao da foca, ordenacao da cobra). Qualquer mudanca de posicao vira
+// A vantagem: nao precisamos programar cada movimento (empurrao do elefante,
+// inversao da pinguim, ordenacao da águia). Qualquer mudanca de posicao vira
 // animacao automaticamente, inclusive as que ainda nem imaginamos.
 
 // Os dois numeros que controlam o ritmo do jogo. Aumente para deixar mais

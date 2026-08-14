@@ -86,7 +86,7 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
     await p.locator('#mao .carta.jogavel').first().click();
     await espera(400);
 
-    // O camaleao pede duas decisoes seguidas (especie, e depois a decisao da
+    // O polvo pede duas decisoes seguidas (especie, e depois a decisao da
     // especie copiada). Por isso resolvemos escolhas ate a barra sumir.
     // A decisao agora acontece clicando numa carta da fila, nao em botoes.
     let etapas = 0;
@@ -108,7 +108,7 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
 
   check(jogadas >= 10, `${jogadas} jogadas feitas clicando na interface`);
   check((await ana.locator('#fila .carta').count()) > 0, 'há cartas na fila');
-  // Depende do sorteio: com gambá, papagaio e crocodilo em cena a fila as vezes
+  // Depende do sorteio: com porco-espinho, tucano e tubarão em cena a fila as vezes
   // nao chega a 5 tao cedo. O que importa e que cartas ESTAO saindo da fila.
   const bar = Number(await ana.textContent('#contagem-bar'));
   const ralo = Number(await ana.textContent('#contagem-ralo'));

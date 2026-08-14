@@ -6,11 +6,11 @@
 // isso destruiria os elementos e mataria a animacao. Movemos os mesmos elementos
 // de um lugar para o outro.
 
-// Os desenhos ficam num unico arquivo SVG (public/assets/animais.svg), cada
-// animal como um <symbol>. Aqui so apontamos para eles. A cor vem do CSS
-// (currentColor), entao a mesma silhueta serve para as 4 cores de jogador.
-const desenhoDo = (animal) =>
-  `<svg class="silhueta" viewBox="0 0 100 100" aria-hidden="true"><use href="/assets/animais.svg#a-${animal}"/></svg>`;
+// Cada carta tem sua arte em public/assets/cartas/<id>.webp. A arte ja traz o
+// numero e o nome do animal impressos, entao o codigo NAO desenha nenhum dos
+// dois por cima - seria informacao repetida.
+const imagemDo = (animal) =>
+  `<img class="arte" src="/assets/cartas/${animal}.webp" alt="" draggable="false" />`;
 
 // Setinha circular: marca as cartas cujo poder acontece de novo a cada turno.
 const MARCA_RECORRENTE = `<span class="marca-rec" title="Poder recorrente: acontece de novo a cada turno">
@@ -39,13 +39,12 @@ function criarCarta(carta, cores) {
   div.className = 'carta';
   div.style.setProperty('--cor-dono', `var(--${cores[carta.dono] || 'suave'})`);
   div.innerHTML = `
-    <span class="cabecalho">
-      <span class="forca">${animal.forca}</span>
-      ${animal.recorrente ? MARCA_RECORRENTE : '<span></span>'}
+    ${imagemDo(carta.animal)}
+    <span class="marcas">
+      ${animal.recorrente ? MARCA_RECORRENTE : ''}
       <button class="info" type="button" aria-label="O que ${animal.nome} faz">i</button>
     </span>
-    <span class="bicho">${desenhoDo(carta.animal)}</span>
-    <span class="nome">${animal.nome}</span>`;
+    <span class="forca-mini">${animal.forca}</span>`;
 
   // O clique no "i" nao pode virar uma jogada: paramos a propagacao aqui.
   // O listener e criado junto com a carta, uma unica vez - por isso nao empilha.
@@ -196,8 +195,8 @@ function renderizarJogo(estado, acoes = {}) {
 
   // Cliques: usamos onclick (propriedade) de proposito. Como os elementos sao
   // reaproveitados, addEventListener empilharia um handler novo a cada desenho.
-  // Toda decisão do jogo acontece clicando numa carta da fila: quem o papagaio
-  // enxota, quem o camaleão vira, até onde o canguru pula. O rótulo em cima da
+  // Toda decisão do jogo acontece clicando numa carta da fila: quem o tucano
+  // enxota, quem o polvo vira, até onde o coelho pula. O rótulo em cima da
   // carta diz o que aquele clique faz.
   const filhos = [...$('fila').children];
   filhos.forEach((filho, i) => {
@@ -280,8 +279,8 @@ function renderizarEscolha(escolha) {
 
   const instrucoes = {
     animal: 'Clique no animal da fila que você quer enxotar',
-    especie: 'Clique no animal da fila que o camaleão vai virar',
-    pular1ou2: 'Clique em até onde o canguru vai pular',
+    especie: 'Clique no animal da fila que o polvo vai virar',
+    pular1ou2: 'Clique em até onde o coelho vai pular',
   };
   $('vez').innerHTML = `<span class="decidir">decida</span> ${instrucoes[escolha.tipo] || ''}`;
 }
@@ -312,7 +311,7 @@ function mostrarPrevia(previsao, estado, mapaDeCartas, cores) {
       if (!carta) continue;
       const el = criarCarta(carta, cores);
       el.classList.add('carta--mini', 'carta--fantasma');
-      el.querySelector('.info')?.remove();
+      el.querySelector('.marcas')?.remove();
       bloco.appendChild(el);
     }
     const etiqueta = document.createElement('span');
@@ -366,7 +365,7 @@ function textoDasInstrucoes() {
     .sort((a, b) => b.forca - a.forca)
     .map(
       (a) => `<li>
-        <span class="instr-icone">${desenhoDo(a.id)}</span>
+        <span class="instr-icone">${imagemDo(a.id)}</span>
         <span class="instr-forca">${a.forca}</span>
         <span><strong>${a.nome}</strong> ${a.recorrente ? `<em class="instr-rec">${MARCA_RECORRENTE} recorrente</em>` : ''}
         <br />${a.poder}</span>
@@ -390,8 +389,8 @@ function textoDasInstrucoes() {
           e o último vai pro ralo.</li>
       <li>Você compra uma carta nova.</li>
     </ol>
-    <p class="instr-dica">A ordem importa: é ela que faz a foca inverter a fila e cair
-    na boca de um crocodilo no mesmo turno.</p>
+    <p class="instr-dica">A ordem importa: é ela que faz o pinguim inverter a fila e cair
+    na boca de um tubarão no mesmo turno.</p>
 
     <h3>Os 12 animais</h3>
     <ul class="instr-lista">${linhas}</ul>`;

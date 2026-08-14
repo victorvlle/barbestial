@@ -12,9 +12,14 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
 
-// A cor que a carta realmente mostra na tela (a listra de cima)
+// A cor que a carta realmente mostra na tela. Com a arte nova, a cor do dono e
+// o anel em volta da carta (o primeiro rgb que aparece no box-shadow).
 const corDaCarta = (p, seletor) =>
-  p.locator(seletor).first().evaluate((e) => getComputedStyle(e).borderTopColor);
+  p.locator(seletor).first().evaluate((e) => {
+    const sombra = getComputedStyle(e).boxShadow;
+    const achou = sombra.match(/rgba?\([^)]+\)/);
+    return achou ? achou[0] : sombra;
+  });
 const corDaFicha = (p, nome) =>
   p.locator(`#placar li:has-text("${nome}") .bolinha`).first()
     .evaluate((e) => getComputedStyle(e).backgroundColor);

@@ -3,7 +3,7 @@
 // A sequencia oficial do turno tem 5 passos, sempre nesta ordem:
 //   1. o jogador poe uma carta no FIM da fila (mais longe da porta do bar)
 //   2. executa a acao da carta recem-jogada
-//   3. dispara as acoes RECORRENTES (zebra, girafa, crocodilo, hipopotamo),
+//   3. dispara as acoes RECORRENTES (cavalo, pavão, tubarão, elefante),
 //      da porta do bar em direcao ao fim da fila
 //   4. se a fila tiver 5 animais: os 2 da frente entram no bar, o ultimo vai pro ralo
 //   5. o jogador compra uma carta nova (passo 5 fica em gameState.js)
@@ -53,10 +53,10 @@ function moverPara(estado, carta, destino) {
 
 // ---------------------------------------------------------------- poderes
 // Assinatura de todo poder: (estado, carta, escolha, forca)
-// "forca" existe por causa do camaleao, que assume a forca da especie copiada.
+// "forca" existe por causa do polvo, que assume a forca da especie copiada.
 
-function poderGamba(estado, carta) {
-  const alvosPossiveis = estado.fila.filter((c) => c.animal !== 'gamba');
+function poderPorcoEspinho(estado, carta) {
+  const alvosPossiveis = estado.fila.filter((c) => c.animal !== 'porcoespinho');
   if (alvosPossiveis.length === 0) return;
 
   // "as duas especies mais fortes" - cada especie tem uma forca unica,
@@ -69,12 +69,12 @@ function poderGamba(estado, carta) {
   paraORalo(
     estado,
     vitimas,
-    [ficha(carta), txt(' fedeu e expulsou '), ...listaDe(vitimas), txt('.')],
+    [ficha(carta), txt(' espetou e mandou pro ralo '), ...listaDe(vitimas), txt('.')],
     carta.dono
   );
 }
 
-function poderPapagaio(estado, carta, escolha) {
+function poderTucano(estado, carta, escolha) {
   const alvo = estado.fila.find((c) => c.uid === escolha?.alvoUid);
   if (!alvo) return; // escolha invalida: o poder simplesmente nao acontece
   paraORalo(
@@ -85,7 +85,7 @@ function poderPapagaio(estado, carta, escolha) {
   );
 }
 
-function poderCanguru(estado, carta, escolha) {
+function poderCoelho(estado, carta, escolha) {
   const pulos = escolha?.pulos === 2 ? 2 : 1;
   const i = estado.fila.indexOf(carta);
   const destino = Math.max(0, i - pulos);
@@ -98,25 +98,25 @@ function poderCanguru(estado, carta, escolha) {
   );
 }
 
-function poderMacaco(estado, carta) {
-  // A carta que esta agindo conta como macaco (importa para o camaleao copiando macaco).
-  const ehMacaco = (c) => c.animal === 'macaco' || c === carta;
-  if (estado.fila.filter(ehMacaco).length < 2) return; // macaco sozinho nao faz nada
+function poderBabuino(estado, carta) {
+  // A carta que esta agindo conta como babuíno (importa para o polvo copiando babuíno).
+  const ehBabuino = (c) => c.animal === 'babuino' || c === carta;
+  if (estado.fila.filter(ehBabuino).length < 2) return; // babuíno sozinho nao faz nada
 
   const vitimas = estado.fila.filter(
-    (c) => c.animal === 'hipopotamo' || c.animal === 'crocodilo'
+    (c) => c.animal === 'elefante' || c.animal === 'tubarao'
   );
   paraORalo(estado, vitimas);
 
-  // O macaco novo vai para a frente; os outros se juntam atras dele em ordem invertida.
-  const antigos = estado.fila.filter((c) => ehMacaco(c) && c !== carta);
-  const resto = estado.fila.filter((c) => !ehMacaco(c));
+  // O babuíno novo vai para a frente; os outros se juntam atras dele em ordem invertida.
+  const antigos = estado.fila.filter((c) => ehBabuino(c) && c !== carta);
+  const resto = estado.fila.filter((c) => !ehBabuino(c));
   estado.fila = [carta, ...antigos.reverse(), ...resto];
 
   registrar(
     estado,
     [
-      txt('Bando de macacos assumiu a frente'),
+      txt('Bando de babuínos assumiu a frente'),
       ...(vitimas.length ? [txt(' e expulsou '), ...listaDe(vitimas)] : []),
       txt('.'),
     ],
@@ -124,10 +124,10 @@ function poderMacaco(estado, carta) {
   );
 }
 
-function poderCamaleao(estado, carta, escolha) {
+function poderPovo(estado, carta, escolha) {
   const especie = escolha?.especie;
   const copiado = buscarAnimal(especie);
-  if (!copiado || especie === 'camaleao') return;
+  if (!copiado || especie === 'polvo') return;
 
   // So da para copiar uma especie que esteja na fila.
   const presente = estado.fila.some((c) => c.animal === especie && c !== carta);
@@ -137,16 +137,16 @@ function poderCamaleao(estado, carta, escolha) {
   aplicarPoder(estado, carta, escolha, copiado.forca, especie);
 }
 
-function poderFoca(estado, carta) {
+function poderPinguim(estado, carta) {
   estado.fila.reverse();
   registrar(estado, [ficha(carta), txt(' inverteu a fila inteira.')], carta.dono);
 }
 
-function poderZebra() {
-  // A zebra nao age: e uma barreira passiva. Crocodilo e hipopotamo a consultam.
+function poderCavalo() {
+  // O cavalo nao age: e uma barreira passiva. Tubarao e elefante o consultam.
 }
 
-function poderGirafa(estado, carta, escolha, forca) {
+function poderPavao(estado, carta, escolha, forca) {
   const i = estado.fila.indexOf(carta);
   if (i <= 0) return;
   const frente = estado.fila[i - 1];
@@ -156,20 +156,20 @@ function poderGirafa(estado, carta, escolha, forca) {
   registrar(estado, [ficha(carta), txt(' passou na frente de '), ficha(frente), txt('.')], carta.dono);
 }
 
-function poderCobra(estado, carta) {
+function poderAguia(estado, carta) {
   // Ordenacao estavel: animais de mesma forca mantem a ordem relativa.
   estado.fila.sort((a, b) => forcaDe(b) - forcaDe(a));
   registrar(estado, [ficha(carta), txt(' reorganizou a fila por força.')], carta.dono);
 }
 
-function poderCrocodilo(estado, carta, escolha, forca) {
+function poderTubarao(estado, carta, escolha, forca) {
   const comidos = [];
   while (true) {
     const i = estado.fila.indexOf(carta);
     if (i <= 0) break;
     const frente = estado.fila[i - 1];
-    // Para imediatamente diante de um mais forte OU de uma zebra.
-    if (frente.animal === 'zebra' || forcaDe(frente) >= forca) break;
+    // Para imediatamente diante de um mais forte OU de um cavalo.
+    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) break;
     comidos.push(frente);
     paraORalo(estado, [frente]);
   }
@@ -178,14 +178,14 @@ function poderCrocodilo(estado, carta, escolha, forca) {
   }
 }
 
-function poderHipopotamo(estado, carta, escolha, forca) {
+function poderElefante(estado, carta, escolha, forca) {
   let passou = 0;
   while (true) {
     const i = estado.fila.indexOf(carta);
     if (i <= 0) break;
     const frente = estado.fila[i - 1];
-    // Nao passa outro hipopotamo (forca igual), nem o leao (mais forte), nem a zebra.
-    if (frente.animal === 'zebra' || forcaDe(frente) >= forca) break;
+    // Nao passa outro elefante (forca igual), nem o lobo alfa (mais forte), nem o cavalo.
+    if (frente.animal === 'cavalo' || forcaDe(frente) >= forca) break;
     estado.fila[i - 1] = carta;
     estado.fila[i] = frente;
     passou++;
@@ -199,22 +199,22 @@ function poderHipopotamo(estado, carta, escolha, forca) {
   }
 }
 
-function poderLeao(estado, carta) {
-  // Dois leoes nao cabem na mesma fila: o recem-chegado vai pro ralo.
-  // Vale tambem para o camaleao que virou leao - enquanto ele age, ELE E um leao,
-  // com a forca e a sorte de um leao.
-  const jaTemLeao = estado.fila.some((c) => c.animal === 'leao' && c !== carta);
-  if (jaTemLeao) {
+function poderLobo(estado, carta) {
+  // Dois lobos alfa nao cabem na mesma alcateia: o recem-chegado vai pro ralo.
+  // Vale tambem para o polvo que virou lobo alfa - enquanto ele age, ELE E um
+  // lobo alfa, com a forca e a sorte de um.
+  const jaTemLobo = estado.fila.some((c) => c.animal === 'lobo' && c !== carta);
+  if (jaTemLobo) {
     paraORalo(
       estado,
       [carta],
-      [ficha(carta), txt(' encarou o leão que já estava na fila e foi expulso pro ralo.')],
+      [ficha(carta), txt(' encarou o lobo alfa que já estava na fila e foi expulso pro ralo.')],
       carta.dono
     );
     return;
   }
-  const macacos = estado.fila.filter((c) => c.animal === 'macaco');
-  paraORalo(estado, macacos);
+  const babuinos = estado.fila.filter((c) => c.animal === 'babuino');
+  paraORalo(estado, babuinos);
   moverPara(estado, carta, 0);
   registrar(
     estado,
@@ -222,7 +222,7 @@ function poderLeao(estado, carta) {
       ficha(carta),
       txt(
         ` assumiu a frente${
-          macacos.length ? ` e espantou ${plural(macacos.length, 'macaco', 'macacos')}` : ''
+          babuinos.length ? ` e espantou ${plural(babuinos.length, 'babuíno', 'babuínos')}` : ''
         }.`
       ),
     ],
@@ -231,21 +231,21 @@ function poderLeao(estado, carta) {
 }
 
 const PODERES = {
-  gamba: poderGamba,
-  papagaio: poderPapagaio,
-  canguru: poderCanguru,
-  macaco: poderMacaco,
-  camaleao: poderCamaleao,
-  foca: poderFoca,
-  zebra: poderZebra,
-  girafa: poderGirafa,
-  cobra: poderCobra,
-  crocodilo: poderCrocodilo,
-  hipopotamo: poderHipopotamo,
-  leao: poderLeao,
+  porcoespinho: poderPorcoEspinho,
+  tucano: poderTucano,
+  coelho: poderCoelho,
+  babuino: poderBabuino,
+  polvo: poderPovo,
+  pinguim: poderPinguim,
+  cavalo: poderCavalo,
+  pavao: poderPavao,
+  aguia: poderAguia,
+  tubarao: poderTubarao,
+  elefante: poderElefante,
+  lobo: poderLobo,
 };
 
-// especie e forca so sao diferentes do padrao quando o camaleao esta imitando alguem.
+// especie e forca so sao diferentes do padrao quando o polvo esta imitando alguem.
 function aplicarPoder(estado, carta, escolha, forca = forcaDe(carta), especie = carta.animal) {
   const poder = PODERES[especie];
   if (poder) poder(estado, carta, escolha, forca);
@@ -310,7 +310,7 @@ function fotografar(estado) {
 }
 
 // Guardamos uma foto depois de cada passo do turno. E isso que permite ao cliente
-// mostrar o hipopotamo empurrando e SO DEPOIS a porta do bar abrindo, em vez de
+// mostrar o elefante empurrando e SO DEPOIS a porta do bar abrindo, em vez de
 // pular direto para o resultado final.
 function jogarNaFila(estado, carta, escolha) {
   estado.quadros = [];
@@ -321,7 +321,7 @@ function jogarNaFila(estado, carta, escolha) {
   aplicarPoder(estado, carta, escolha); // 2: o poder da carta jogada
   fotografar(estado);
 
-  acoesRecorrentes(estado, carta); // 3: zebra, girafa, crocodilo, hipopotamo
+  acoesRecorrentes(estado, carta); // 3: cavalo, pavão, tubarão, elefante
   fotografar(estado);
 
   const resultado = resolverPorta(estado); // 4: a porta do bar

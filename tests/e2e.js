@@ -78,7 +78,7 @@ function check(cond, msg) {
   check(!foraDaVez.ok && /vez/.test(foraDaVez.erro), `jogada fora da vez recusada: "${foraDaVez.erro}"`);
 
   const proximoEstado = esperarEvento(bruno, 'estado-atualizado');
-  const carta = eA.jogadores.find(j => j.id === 'ana').mao.find(c => !['papagaio','canguru','camaleao'].includes(c.animal));
+  const carta = eA.jogadores.find(j => j.id === 'ana').mao.find(c => !['tucano','coelho','polvo'].includes(c.animal));
   const jogou = await pedir(ana, 'jogar-carta', { uid: carta.uid });
   check(jogou.ok, `Ana jogou ${carta.animal}`);
   const depois = await proximoEstado;
@@ -104,7 +104,7 @@ function check(cond, msg) {
   // ---------------------------------------------------------------------
   // PARTE 2: uma partida inteira, do inicio ao fim, so por socket.
   // Simula exatamente o que main.js faz quando o jogador clica numa carta,
-  // inclusive as escolhas do papagaio, do canguru e do camaleao.
+  // inclusive as escolhas do tucano, do coelho e do polvo.
   // ---------------------------------------------------------------------
   console.log('');
   const p1 = io(url), p2 = io(url);
@@ -121,16 +121,16 @@ function check(cond, msg) {
 
   // Copia da logica do cliente: monta a escolha que a carta exige.
   function escolhaPara(carta, estado) {
-    const catalogo = { papagaio: 'animal', canguru: 'pular1ou2', camaleao: 'especie' };
+    const catalogo = { tucano: 'animal', coelho: 'pular1ou2', polvo: 'especie' };
     const tipo = catalogo[carta.animal];
     if (!tipo || estado.fila.length === 0) return null;
     if (tipo === 'animal') return { alvoUid: estado.fila[0].uid };
     if (tipo === 'pular1ou2') return { pulos: 1 };
-    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'camaleao');
+    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'polvo');
     if (especies.length === 0) return null;
     const dados = { especie: especies[0] };
-    if (especies[0] === 'papagaio') dados.alvoUid = estado.fila[0].uid;
-    if (especies[0] === 'canguru') dados.pulos = 1;
+    if (especies[0] === 'tucano') dados.alvoUid = estado.fila[0].uid;
+    if (especies[0] === 'coelho') dados.pulos = 1;
     return dados;
   }
 

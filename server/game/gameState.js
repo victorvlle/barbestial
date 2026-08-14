@@ -162,7 +162,7 @@ function opcoesDeEscolha(estado, carta) {
   }
 
   if (tipo === 'especie') {
-    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'camaleao');
+    const especies = [...new Set(estado.fila.map((c) => c.animal))].filter((e) => e !== 'polvo');
     return especies.map((especie) => {
       // Se a especie copiada tambem pede decisao, resolvemos a mais simples.
       const escolha = { especie };
@@ -189,7 +189,7 @@ function jogadaAleatoria(estado, aleatorio = Math.random) {
 
 // Pre-visualizacao: para cada carta da mao de quem esta na vez, simula a jogada
 // e guarda como a fila ficaria. Inclui uma simulacao por opcao nas cartas que
-// pedem decisao (papagaio, canguru, camaleao), para o jogador poder comparar.
+// pedem decisao (tucano, coelho, polvo), para o jogador poder comparar.
 //
 // So calculamos para quem esta na vez: sao poucas simulacoes e elas ficam
 // prontas antes do jogador passar o mouse, sem ida e volta pela rede.

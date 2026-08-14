@@ -167,7 +167,7 @@ function opcaoDaCarta(carta, indice, total) {
   }
 
   if (escolha.tipo === 'especie') {
-    if (carta.animal === 'camaleao') return null; // camaleão não imita camaleão
+    if (carta.animal === 'polvo') return null; // polvo não imita polvo
     return {
       rotulo: `virar ${CATALOGO[carta.animal]?.nome || ''}`,
       escolha: { especie: carta.animal },
@@ -177,7 +177,7 @@ function opcaoDaCarta(carta, indice, total) {
   }
 
   if (escolha.tipo === 'pular1ou2') {
-    // O canguru entra no fim da fila e pula os últimos. Clicar na última carta
+    // O coelho entra no fim da fila e pula os últimos. Clicar na última carta
     // significa pular 1; na penúltima, pular 2.
     const pulos = total - indice;
     if (pulos > 2) return null;
@@ -202,13 +202,13 @@ function comecarJogada(carta) {
 function temOpcoes(tipo) {
   if (estadoAtual.fila.length === 0) return false;
   if (tipo === 'especie') {
-    return estadoAtual.fila.some((c) => c.animal !== 'camaleao');
+    return estadoAtual.fila.some((c) => c.animal !== 'polvo');
   }
   return true;
 }
 
-// O camaleao pode ter duas etapas: escolher a especie e, se ela tambem pedir
-// decisao (virou papagaio ou canguru), escolher de novo - sempre clicando numa
+// O polvo pode ter duas etapas: escolher a especie e, se ela tambem pedir
+// decisao (virou tucano ou coelho), escolher de novo - sempre clicando numa
 // carta da fila.
 function concluir(dados) {
   if (dados.especie) {
@@ -246,8 +246,8 @@ function espiarJogada(carta) {
   desenharPrevia(previsao.padrao);
 }
 
-// Durante uma escolha, espiar uma opcao especifica (a vitima do papagaio,
-// quantos pulos do canguru, quem o camaleao vai imitar).
+// Durante uma escolha, espiar uma opcao especifica (a vitima do tucano,
+// quantos pulos do coelho, quem o polvo vai imitar).
 function espiarOpcao(chave) {
   if (!preferencias.previaLigada() || !escolha) return;
   const previsao = estadoAtual.previsoes?.[escolha.carta.uid];
