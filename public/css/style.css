@@ -40,10 +40,11 @@
   /* A mao tem 4 cartas e um bloco so pra ela: cabem cartas maiores */
   --mao-l: 104px;
   --mao-a: 161px;
-  /* Cartas da previa: as menores de todas - ela e so um resumo do que vai
-     acontecer, e precisa caber numa faixa fina no alto da mesa */
-  --previa-l: 34px;
-  --previa-a: 53px;
+  /* Cartas da previa: do mesmo tamanho das do bar e do ralo. Menores que isso
+     e o nome do animal impresso na arte fica ilegivel, que e justamente o que
+     o jogador precisa ler para comparar as jogadas. */
+  --previa-l: 54px;
+  --previa-a: 84px;
 }
 
 * { box-sizing: border-box; }
@@ -354,9 +355,11 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   z-index: 22; /* acima do palco dos hologramas: e informacao, nao cenario */
   pointer-events: none; /* informativa: nunca rouba o clique */
   border-radius: 10px; padding: .2rem .55rem;
-  background: rgba(16, 13, 9, .97);
+  /* Fundo opaco de proposito: a previa passa por cima do placar, e um fundo
+     translucido deixava os nomes dos jogadores fantasmando atras das cartas. */
+  background: #14110c;
   border: 1px dashed rgba(242,177,52,.5);
-  box-shadow: 0 14px 34px rgba(0,0,0,.65);
+  box-shadow: 0 14px 34px rgba(0,0,0,.75);
   display: flex; align-items: center; gap: .6rem;
   visibility: hidden; opacity: 0; transition: opacity .15s;
 }

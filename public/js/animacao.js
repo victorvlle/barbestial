@@ -11,13 +11,22 @@
 // inversao da pinguim, ordenacao da águia). Qualquer mudanca de posicao vira
 // animacao automaticamente, inclusive as que ainda nem imaginamos.
 
-// Os dois numeros que controlam o ritmo do jogo. Aumente para deixar mais
-// contemplativo, diminua para acelerar. Sao o unico lugar a mexer.
-const DURACAO = 640; // ms que uma carta leva para deslizar ate o novo lugar
-const PAUSA_ENTRE_QUADROS = 900; // respiro entre um passo do turno e o proximo
-// Quando o passo ja teve holograma, o respiro e curto: o jogador acabou de ver
-// o que aconteceu e o proximo nao pode perder tempo do relogio dele esperando.
-const PAUSA_CURTA = 260;
+// O RITMO DO JOGO mora aqui. Sao os unicos numeros a mexer para deixar tudo
+// mais lento (contemplativo) ou mais rapido.
+//
+// A REGRA QUE NAO PODE SER QUEBRADA: nenhuma pausa pode ser menor que DURACAO.
+// A pausa e o tempo ate o proximo quadro ser pintado; se ela acabar antes do
+// deslize terminar, as cartas sao reposicionadas no meio do caminho e o
+// movimento vira um piscar. Era o que acontecia com a águia reorganizando a
+// fila: o holograma dela rodava, as cartas comecavam a deslizar e 260ms depois
+// ja estavam no lugar novo, sem ninguem entender o que tinha acontecido.
+// Ha um teste em tests/interface.js que trava essa regra.
+
+const DURACAO = 820; // ms que uma carta leva para deslizar ate o novo lugar
+const PAUSA_ENTRE_QUADROS = 1150; // respiro entre um passo do turno e o proximo
+// Depois de um passo que ja teve holograma o respiro e menor - o jogador
+// acabou de assistir a cena - mas continua cobrindo o deslize inteiro.
+const PAUSA_CURTA = 1000;
 
 const cartasVivas = new Map(); // uid -> elemento HTML reaproveitado entre quadros
 

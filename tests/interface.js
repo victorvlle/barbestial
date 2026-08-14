@@ -60,6 +60,22 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(!lugar.cobreCartaDaFila, 'a prévia não cobre nenhuma carta da fila');
   check(lugar.dentroDaTela, 'a prévia cabe inteira na tela');
 
+  // O nome do animal vem impresso na arte: se a carta da prévia ficar menor que
+  // a do bar e do ralo, o nome some e a prévia perde a serventia.
+  const tamanho = await p.evaluate(() => {
+    const c = document.querySelector('#previa-linha .carta');
+    return c ? Math.round(c.getBoundingClientRect().height) : 0;
+  });
+  check(tamanho >= 80, `as cartas da prévia são grandes o bastante para ler o nome (${tamanho}px de altura)`);
+
+  // Ritmo: nenhuma pausa pode ser menor que o deslize, senão o quadro seguinte
+  // é pintado no meio do movimento e a reorganização da fila vira um piscar.
+  const ritmo = await p.evaluate(() => ({ DURACAO, PAUSA_ENTRE_QUADROS, PAUSA_CURTA }));
+  check(ritmo.PAUSA_CURTA >= ritmo.DURACAO,
+    `a pausa depois de um holograma cobre o deslize inteiro (${ritmo.PAUSA_CURTA} ≥ ${ritmo.DURACAO}ms)`);
+  check(ritmo.PAUSA_ENTRE_QUADROS >= ritmo.DURACAO,
+    `a pausa entre quadros cobre o deslize inteiro (${ritmo.PAUSA_ENTRE_QUADROS} ≥ ${ritmo.DURACAO}ms)`);
+
   // o "i" daquela carta esta realmente clicavel (ninguem por cima)?
   const alvoDoClique = await carta.locator('.info').evaluate((el) => {
     const r = el.getBoundingClientRect();
