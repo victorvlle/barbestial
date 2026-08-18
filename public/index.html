@@ -18,23 +18,69 @@
   <!-- TELA 0: login. Fica por cima de tudo até a pessoa entrar na conta. -->
   <div class="login escondida" id="tela-login">
     <div class="painel painel--login">
-      <h2 class="login-titulo">Entre para jogar</h2>
-      <p class="dica">Sua conta guarda suas partidas e sua pontuação da semana.</p>
-
-      <!-- Só aparece quando o servidor tem GOOGLE_CLIENT_ID configurado -->
-      <div class="bloco-google escondida" id="bloco-google">
-        <div id="botao-google"></div>
-        <div class="separador"><span>ou use um apelido</span></div>
+      <div class="abas" id="abas">
+        <button class="aba aba--ativa" data-modo="entrar">Entrar</button>
+        <button class="aba" data-modo="criar">Criar conta</button>
       </div>
 
-      <label for="login-nome">Apelido</label>
-      <input id="login-nome" maxlength="16" placeholder="Como aparece pros outros" autocomplete="username" />
+      <!-- ------------------------------------------------------ ENTRAR -->
+      <div class="modo" id="modo-entrar">
+        <div class="bloco-google escondida" id="google-entrar-bloco">
+          <div id="google-entrar"></div>
+          <div class="separador"><span>ou com apelido e senha</span></div>
+        </div>
 
-      <label for="login-senha">Senha</label>
-      <input id="login-senha" type="password" maxlength="64" placeholder="Pelo menos 4 caracteres" autocomplete="current-password" />
+        <label for="login-nome">Apelido</label>
+        <input id="login-nome" maxlength="16" placeholder="Seu apelido" autocomplete="username" />
 
-      <button id="btn-login" class="principal">Entrar</button>
-      <button id="btn-criar-conta" class="secundario">Criar uma conta</button>
+        <label for="login-senha">Senha</label>
+        <input id="login-senha" type="password" maxlength="64" placeholder="Sua senha" autocomplete="current-password" />
+
+        <button id="btn-login" class="principal">Entrar</button>
+        <button id="btn-esqueci" class="ligacao">Esqueci minha senha</button>
+      </div>
+
+      <!-- -------------------------------------------------- CRIAR CONTA -->
+      <div class="modo escondida" id="modo-criar">
+        <p class="dica">Os três são obrigatórios. O Google é o que vai te devolver
+          a conta se você esquecer a senha.</p>
+
+        <label for="novo-nome">1. Apelido</label>
+        <input id="novo-nome" maxlength="16" placeholder="Como aparece no ranking" autocomplete="username" />
+
+        <label for="nova-senha">2. Senha</label>
+        <input id="nova-senha" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
+
+        <label>3. Conta do Google</label>
+        <div id="google-criar"></div>
+        <p class="conectado escondida" id="google-criar-ok"></p>
+
+        <button id="btn-criar-conta" class="principal" disabled>Criar conta</button>
+      </div>
+
+      <!-- ------------------------------------------------- RECUPERAÇÃO -->
+      <div class="modo escondida" id="modo-recuperar">
+        <h2 class="login-titulo">Recuperar a conta</h2>
+        <p class="dica">Não pedimos seu apelido: quem devolve o acesso é o Google.
+          Entre na conta do Google que você conectou ao se cadastrar.</p>
+
+        <div id="google-recuperar"></div>
+        <p class="conectado escondida" id="google-recuperar-ok"></p>
+
+        <div class="escondida" id="bloco-nova-senha">
+          <label for="senha-nova">Nova senha</label>
+          <input id="senha-nova" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
+          <button id="btn-salvar-senha" class="principal">Salvar e entrar</button>
+        </div>
+
+        <button id="btn-voltar-login" class="ligacao">Voltar</button>
+      </div>
+
+      <!-- Aparece quando o servidor ainda não tem o Google configurado -->
+      <p class="sem-google escondida" id="sem-google">
+        O cadastro está indisponível: este servidor ainda não foi configurado
+        com o login do Google.
+      </p>
 
       <p class="aviso" id="aviso-login"></p>
     </div>

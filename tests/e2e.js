@@ -122,8 +122,8 @@ function check(cond, msg) {
   // inclusive as escolhas do tucano, do coelho e do polvo.
   // ---------------------------------------------------------------------
   console.log('');
-  const um = await jogador(url, 'Um');
-  const dois = await jogador(url, 'Dois');
+  const um = await jogador(url, 'Umzinho');
+  const dois = await jogador(url, 'Doisinho');
   const p1 = um.socket, p2 = dois.socket;
   await espera(400);
 

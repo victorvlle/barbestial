@@ -437,10 +437,15 @@ document.addEventListener('keydown', (e) => {
 
 $('btn-login').addEventListener('click', entrarComSenha);
 $('btn-criar-conta').addEventListener('click', criarConta);
+$('btn-salvar-senha').addEventListener('click', salvarNovaSenha);
+$('btn-esqueci').addEventListener('click', () => irPara('recuperar'));
+$('btn-voltar-login').addEventListener('click', () => irPara('entrar'));
 $('btn-sair-conta').addEventListener('click', sair);
-$('login-senha').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('btn-login').click();
-});
+
+// Enter em cada formulário aciona o botão daquele formulário.
+$('login-senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-login').click(); });
+$('nova-senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-criar-conta').click(); });
+$('senha-nova').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-salvar-senha').click(); });
 
 carregarCatalogo();
 carregarMusica();

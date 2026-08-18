@@ -201,15 +201,15 @@ function registrarPartida({ partidaId, sala, resultado, quando = Date.now() }) {
 function rankingDaSemana(chave = chaveDaSemana(), limite = 100) {
   return abrir()
     .prepare(
-      `SELECT u.id, u.nome,
+      `SELECT u.id, u.apelido AS nome,
               SUM(r.pontos)  AS pontos,
               COUNT(*)       AS partidas,
               SUM(CASE WHEN r.posicao = 1 THEN 1 ELSE 0 END) AS vitorias
          FROM resultados r
          JOIN usuarios  u ON u.id = r.usuario_id
         WHERE r.semana = ?
-        GROUP BY u.id, u.nome
-        ORDER BY pontos DESC, partidas ASC, u.nome COLLATE NOCASE ASC
+        GROUP BY u.id, u.apelido
+        ORDER BY pontos DESC, partidas ASC, u.apelido COLLATE NOCASE ASC
         LIMIT ?`
     )
     .all(chave, limite)

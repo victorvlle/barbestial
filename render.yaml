@@ -25,6 +25,11 @@ services:
       - key: NODE_VERSION
         value: "22"
 
+      # Alem do efeito normal, isto FECHA o modo de teste do login com Google:
+      # ver a trava em server/auth/google.js.
+      - key: NODE_ENV
+        value: production
+
       # Onde o SQLite guarda tudo. Tem que apontar para dentro do disco acima.
       - key: BANCO_CAMINHO
         value: /var/data/barbestial.db
@@ -39,8 +44,15 @@ services:
       - key: FUSO_MINUTOS
         value: "-180"
 
+      # Senha do painel /admin. Preencha no painel do Render (Environment).
+      # SEM ela, /admin nao existe (404) - e assim que tem que ser em producao
+      # se voce nao quiser o painel.
+      - key: ADMIN_SEGREDO
+        sync: false
+
       # Login com Google: preencha no painel do Render (Environment), nunca aqui.
-      # Sem essa variavel o botao do Google simplesmente nao aparece e o jogo
-      # continua funcionando com as contas de apelido e senha.
+      # OBRIGATORIO: sem esta variavel ninguem consegue se CADASTRAR, porque
+      # toda conta precisa de um Google conectado (e ele que devolve o acesso
+      # de quem esquece a senha). Quem ja tem conta ainda entra por senha.
       - key: GOOGLE_CLIENT_ID
         sync: false

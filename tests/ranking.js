@@ -8,7 +8,7 @@
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
-const { criarConta, ambienteDeTeste, entrarNoJogo } = require('./ajuda');
+const { criarConta, ambienteDeTeste, entrarNoJogo, crachaDeTeste } = require('./ajuda');
 const { io } = require('socket.io-client');
 
 const raiz = path.join(__dirname, '..');
@@ -92,16 +92,28 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
   // ================================================== 1. as rotas de conta
   const config = await fetch(`${url}/api/conta/config`).then((r) => r.json());
   check(config.ok, 'o servidor diz como dá para entrar');
+  check(config.google === true, 'o login com Google está disponível');
+  check(config.modoTeste === true, 'e este servidor está em modo de teste (crachás falsos)');
+  // O que sai daqui é público por natureza. A checagem é por lista fechada:
+  // qualquer campo novo que alguém adicione sem pensar faz este teste falhar.
   check(
-    typeof config.google === 'boolean',
-    `login com Google: ${config.google ? 'ligado' : 'desligado (sem GOOGLE_CLIENT_ID)'}`
+    JSON.stringify(Object.keys(config).sort()) ===
+      JSON.stringify(['google', 'googleClientId', 'modoTeste', 'ok', 'senhaMinima']),
+    `a configuração pública só tem campos públicos (${Object.keys(config).join(', ')})`
   );
-  // O que sai daqui é público por natureza; nenhum segredo pode aparecer.
-  const textoDaConfig = JSON.stringify(config).toLowerCase();
-  check(
-    !textoDaConfig.includes('secret') && !textoDaConfig.includes('senha'),
-    'a configuração pública não expõe segredo nenhum'
-  );
+
+  // E o freio de tentativas: só erro conta, e ele bloqueia mesmo.
+  let travou = false;
+  for (let i = 0; i < 14; i++) {
+    const r = await fetch(`${url}/api/conta/entrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: 'NaoExiste', senha: 'chute' }),
+    }).then((r) => r.json());
+    if (/Muitas tentativas/.test(r.erro || '')) { travou = true; break; }
+  }
+  check(travou, 'o freio bloqueia quem fica chutando senha');
+  await espera(61000); // deixa a janela do freio expirar antes de seguir
 
   const semSessao = await fetch(`${url}/api/conta/eu`);
   check(semSessao.status === 401, 'sem cracha, /api/conta/eu responde 401');
@@ -137,15 +149,25 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
     'o menu do jogo fica atrás da tela de login'
   );
 
+  // Cadastro: os TRÊS são obrigatórios. Sem o Google, o botão nem habilita.
+  await pagina.click('.aba[data-modo="criar"]');
+  await pagina.fill('#novo-nome', 'Victor');
+  await pagina.fill('#nova-senha', 'senha-de-teste');
+  check(
+    await pagina.locator('#btn-criar-conta').isDisabled(),
+    'sem conectar o Google, o botão de criar conta fica desabilitado'
+  );
+
   // Senha curta demais: o servidor recusa e a tela explica.
-  await pagina.fill('#login-nome', 'Victor');
-  await pagina.fill('#login-senha', '12');
+  await pagina.fill('#nova-senha', '12');
+  await pagina.evaluate((c) => aoReceberDoGoogle({ credential: c }), crachaDeTeste('CurtaTeste'));
   await pagina.click('#btn-criar-conta');
   await espera(500);
   check(
-    (await pagina.textContent('#aviso-login')).includes('4'),
+    (await pagina.textContent('#aviso-login')).includes('6'),
     `senha curta é recusada com explicação: "${await pagina.textContent('#aviso-login')}"`
   );
+  await pagina.click('.aba[data-modo="entrar"]');
 
   await entrarNoJogo(pagina, 'Victor');
   check(!(await pagina.locator('#tela-login').isVisible()), 'depois de criar a conta, entra no jogo');
@@ -164,6 +186,53 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
     body: JSON.stringify({ nome: 'Victor', senha: 'senha-de-teste' }),
   }).then((r) => r.json());
   check(denovo.ok, 'dá para entrar de novo na conta já criada');
+
+  // ...e pelo Google também, com um clique só.
+  const peloGoogle = await fetch(`${url}/api/conta/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: crachaDeTeste('Victor') }),
+  }).then((r) => r.json());
+  check(peloGoogle.ok && peloGoogle.usuario.nome === 'Victor', 'e pelo Google, com um clique');
+
+  // ============================ RECUPERAÇÃO DE SENHA
+  // A trava principal: saber o apelido não abre nada.
+  const soComApelido = await fetch(`${url}/api/conta/recuperar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: 'Victor', novaSenha: 'invadido123' }),
+  }).then((r) => r.json());
+  check(!soComApelido.ok, 'não dá para recuperar a senha só com o apelido');
+
+  // Um estranho com o PRÓPRIO Google não alcança a conta da vítima.
+  await criarConta(url, 'Estranho');
+  const tentativa = await fetch(`${url}/api/conta/recuperar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: crachaDeTeste('Estranho'), novaSenha: 'invadido123' }),
+  }).then((r) => r.json());
+  check(tentativa.ok, 'o estranho troca a senha DELE (é a conta dele)');
+  const vitimaIntacta = await fetch(`${url}/api/conta/entrar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: 'Victor', senha: 'senha-de-teste' }),
+  }).then((r) => r.json());
+  check(vitimaIntacta.ok, 'e a senha do Victor continua a mesma');
+
+  // Com o Google certo, a recuperação funciona.
+  const recuperou = await fetch(`${url}/api/conta/recuperar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: crachaDeTeste('Victor'), novaSenha: 'senha-nova-123' }),
+  }).then((r) => r.json());
+  check(recuperou.ok && recuperou.token, 'com o Google certo, a senha é redefinida e já entra');
+
+  const senhaVelha = await fetch(`${url}/api/conta/entrar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: 'Victor', senha: 'senha-de-teste' }),
+  }).then((r) => r.json());
+  check(!senhaVelha.ok, 'e a senha antiga para de funcionar');
 
   const eu = await fetch(`${url}/api/conta/eu`, {
     headers: { Authorization: `Bearer ${denovo.token}` },

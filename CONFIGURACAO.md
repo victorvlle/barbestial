@@ -27,10 +27,14 @@ nova a cada boot e todo mundo é deslogado a cada deploy. No Render, o
 `generateValue: true` do `render.yaml` resolve isso — o Render sorteia uma vez e
 guarda.
 
-## Ligando o login com o Google
+## Ligando o login com o Google — OBRIGATÓRIO
 
-O jogo funciona sem isso: quem não tem `GOOGLE_CLIENT_ID` configurado usa contas
-de apelido e senha. Para ligar o botão do Google:
+**Sem `GOOGLE_CLIENT_ID` ninguém consegue se cadastrar.** Toda conta precisa de
+apelido + senha + conta do Google conectada, porque o Google é a única prova
+aceita para recuperar a senha. Quem já tem conta ainda consegue entrar por
+apelido e senha, mas cadastros novos ficam bloqueados.
+
+Para ligar o botão do Google:
 
 1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie um
    projeto (ou use um que já tenha).
@@ -51,11 +55,27 @@ garante a segurança é a **assinatura** do crachá que o Google devolve, confer
 no servidor com as chaves públicas do próprio Google
 (`server/auth/google.js`). Nenhuma senha do Google passa por este servidor.
 
+## Como funciona a conta
+
+Uma conta tem **três** identificações, e nenhuma é opcional:
+
+| | para que serve |
+|---|---|
+| apelido | o login do dia a dia e o nome no ranking |
+| senha | guardada como `scrypt(senha, sal)`; a senha em si não existe no banco |
+| Google | a única prova aceita para recuperar a senha |
+
+**Entrar** no dia a dia: apelido+senha **ou** o botão do Google, tanto faz.
+
+**Recuperar a senha**: só pelo Google. A rota `/api/conta/recuperar` **não
+recebe apelido** — a conta é encontrada pelo Google em que a pessoa acabou de
+entrar. Saber o apelido de alguém não abre porta nenhuma.
+
 ## Onde ficam os dados
 
 Um arquivo SQLite, com quatro tabelas (`server/dados/banco.js`):
 
-- `usuarios` — uma linha por conta (Google ou apelido/senha)
+- `usuarios` — uma linha por conta (apelido, senha em hash, Google)
 - `partidas` — uma linha por partida concluída
 - `resultados` — uma linha por jogador em cada partida
 - e os índices por semana, que fazem o ranking ser instantâneo
@@ -68,3 +88,32 @@ histórico continua inteiro em `/api/ranking?semana=2026-S32`.
 
 O banco inteiro é um arquivo só. Copiar `barbestial.db` (e, se existirem,
 `barbestial.db-wal` e `barbestial.db-shm`) é o backup completo.
+
+## Painel de administração
+
+`GET /admin` mostra as contas cadastradas, o ranking da semana e as últimas
+partidas, com atualização automática a cada 15 segundos.
+
+Para ligar, defina `ADMIN_SEGREDO` no Render (**Environment**) com uma senha
+longa e aleatória. **Sem essa variável a rota não existe**: `/admin` responde
+404 como qualquer endereço inventado — esquecer de configurar deixa o painel
+fechado, nunca aberto.
+
+A senha vai num cabeçalho `Authorization`, nunca na URL (a URL ficaria no
+histórico do navegador e nos registros de acesso). Tentativas erradas são
+freadas por IP; acertos não contam para o freio.
+
+O painel nunca devolve `senha_hash` nem `senha_sal` — nem para o administrador.
+
+Alternativa sem expor nada na internet: `npm run contas`, pelo Shell do Render.
+
+## Modo de teste do Google
+
+Os testes automatizados precisam percorrer o cadastro, e não há como gerar um
+crachá de verdade do Google sem navegador e conta real. `GOOGLE_MODO_TESTE=1`
+faz o servidor aceitar crachás falsos no formato `teste:<id>:<email>`.
+
+**Isso não liga em produção.** A checagem em `server/auth/google.js` exige que
+`NODE_ENV` seja diferente de `production` — e o `render.yaml` define
+`NODE_ENV=production` justamente para fechar essa porta. Se alguém definir a
+variável em produção, o servidor a ignora e avisa no log.

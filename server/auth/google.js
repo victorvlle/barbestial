@@ -23,7 +23,30 @@ const { OAuth2Client } = require('google-auth-library');
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 
-const ligado = () => Boolean(CLIENT_ID);
+// ------------------------------------------------------------ modo de teste
+//
+// Os testes automatizados precisam percorrer o cadastro inteiro, e nao ha como
+// gerar um cracha de verdade do Google sem um navegador e uma conta real.
+// Com GOOGLE_MODO_TESTE=1 o servidor aceita crachas falsos no formato
+//     teste:<identificador>:<email>
+//
+// DUAS TRAVAS PARA ISSO NUNCA VAZAR PARA PRODUCAO:
+//   1. NODE_ENV=production desliga o modo de teste mesmo que a variavel exista.
+//      Nao ha como ligar em producao - a checagem nao consulta so a variavel.
+//   2. Um aviso gritado no console a cada boot, para nao passar despercebido.
+// O render.yaml define NODE_ENV=production de proposito, fechando essa porta.
+const EM_PRODUCAO = process.env.NODE_ENV === 'production';
+const MODO_TESTE = process.env.GOOGLE_MODO_TESTE === '1' && !EM_PRODUCAO;
+
+if (process.env.GOOGLE_MODO_TESTE === '1' && EM_PRODUCAO) {
+  console.warn('[google] GOOGLE_MODO_TESTE ignorado: o servidor está em produção.');
+}
+if (MODO_TESTE) {
+  console.warn('[google] ATENÇÃO: modo de teste ligado. Crachás falsos são aceitos.');
+}
+
+// Ligado quando da para usar o Google de verdade OU quando estamos testando.
+const ligado = () => Boolean(CLIENT_ID) || MODO_TESTE;
 
 let cliente = null;
 const obterCliente = () => (cliente = cliente || new OAuth2Client(CLIENT_ID));
@@ -33,6 +56,15 @@ const obterCliente = () => (cliente = cliente || new OAuth2Client(CLIENT_ID));
 async function verificarToken(idToken) {
   if (!ligado()) throw new Error('O login com Google não está configurado neste servidor.');
   if (!idToken) throw new Error('Token do Google ausente.');
+
+  // So existe quando MODO_TESTE esta ligado - e ele nao liga em producao.
+  if (MODO_TESTE && String(idToken).startsWith('teste:')) {
+    const [, sub, email] = String(idToken).split(':');
+    if (!sub) throw new Error('Token de teste malformado.');
+    return { sub: `teste-${sub}`, nome: sub, email: email || `${sub}@exemplo.test` };
+  }
+
+  if (!CLIENT_ID) throw new Error('O login com Google não está configurado neste servidor.');
 
   const bilhete = await obterCliente().verifyIdToken({ idToken, audience: CLIENT_ID });
   const dados = bilhete.getPayload();
@@ -45,4 +77,4 @@ async function verificarToken(idToken) {
   };
 }
 
-module.exports = { ligado, verificarToken, CLIENT_ID };
+module.exports = { ligado, verificarToken, CLIENT_ID, MODO_TESTE };

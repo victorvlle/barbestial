@@ -6,24 +6,34 @@
 
 const { io } = require('socket.io-client');
 
-// Cria uma conta local nova e devolve { token, usuario }.
-async function criarConta(url, nome) {
+// Um cracha falso do Google, aceito so quando GOOGLE_MODO_TESTE=1 e o servidor
+// NAO esta em producao (ver server/auth/google.js). Cada nome vira uma conta
+// Google diferente, como aconteceria na vida real.
+const crachaDeTeste = (nome) => `teste:${nome}:${nome.toLowerCase()}@exemplo.test`;
+
+// Cria uma conta nova (apelido + senha + Google) e devolve { token, usuario }.
+async function criarConta(url, nome, senha = 'senha-de-teste') {
   const resposta = await fetch(`${url}/api/conta/criar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, senha: 'senha-de-teste' }),
+    body: JSON.stringify({ nome, senha, idToken: crachaDeTeste(nome) }),
   });
   const dados = await resposta.json();
   if (!dados.ok) throw new Error(`não consegui criar a conta ${nome}: ${dados.erro}`);
   return dados;
 }
 
-// A mesma coisa, mas pela tela: preenche o formulario de login e espera a tela
-// sumir. E o caminho que uma pessoa de verdade percorre.
+// A mesma coisa, mas pela tela: percorre o formulario de cadastro como uma
+// pessoa faria. O botao do Google nao existe em modo de teste (a biblioteca
+// dele nao e carregada), entao a pagina recebe o cracha falso pela mesma funcao
+// que o botao chamaria - o resto do caminho e idêntico.
 async function entrarNoJogo(pagina, nome, senha = 'senha-de-teste') {
   await pagina.waitForSelector('#tela-login', { state: 'visible', timeout: 10000 });
-  await pagina.fill('#login-nome', nome);
-  await pagina.fill('#login-senha', senha);
+  await pagina.click('.aba[data-modo="criar"]');
+  await pagina.fill('#novo-nome', nome);
+  await pagina.fill('#nova-senha', senha);
+  await pagina.evaluate((cracha) => aoReceberDoGoogle({ credential: cracha }), crachaDeTeste(nome));
+  await pagina.waitForSelector('#btn-criar-conta:not([disabled])', { timeout: 5000 });
   await pagina.click('#btn-criar-conta');
   // 'hidden' e o estado certo aqui: a tela de login some, ela nao vira visivel.
   await pagina.waitForSelector('#tela-login', { state: 'hidden', timeout: 10000 });
@@ -49,8 +59,13 @@ function ambienteDeTeste(porta, extras = {}) {
     PORT: porta,
     BANCO_CAMINHO: ':memory:',
     SESSAO_SEGREDO: 'segredo-de-teste',
+    // Sem isto nao ha como testar o cadastro: ele exige um cracha do Google, e
+    // nao da para gerar um de verdade sem navegador e conta real. A trava que
+    // impede isso de vazar para producao esta em server/auth/google.js.
+    GOOGLE_MODO_TESTE: '1',
+    NODE_ENV: 'test',
     ...extras,
   };
 }
 
-module.exports = { criarConta, jogador, entrarNoJogo, ambienteDeTeste };
+module.exports = { criarConta, jogador, entrarNoJogo, ambienteDeTeste, crachaDeTeste };

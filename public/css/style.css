@@ -1044,9 +1044,37 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .painel--login label { margin-top: .8rem; }
 .painel--login .secundario { margin-top: .5rem; }
 
-/* O botao do Google e desenhado pela biblioteca dele; so centralizamos. */
+/* Os botoes do Google sao desenhados pela biblioteca dele; so centralizamos. */
 .bloco-google { display: grid; justify-items: center; }
-#botao-google { min-height: 44px; }
+#google-entrar, #google-criar, #google-recuperar {
+  display: grid; justify-items: center; min-height: 44px; margin-top: .2rem;
+}
+
+/* Abas Entrar / Criar conta */
+.abas { display: flex; gap: .3rem; margin-bottom: 1.1rem; padding: .25rem; border-radius: 10px; background: #12161f; }
+.aba {
+  flex: 1; padding: .5rem .6rem; border: none; border-radius: 8px;
+  background: transparent; color: var(--suave); font-size: .85rem;
+}
+.aba--ativa { background: #2b3446; color: var(--texto); }
+.aba:hover:not(.aba--ativa) { filter: none; color: var(--texto); }
+
+/* Um botao que parece um link: para acoes secundarias como "esqueci a senha" */
+.ligacao {
+  display: block; width: 100%; margin-top: .7rem; padding: .4rem;
+  background: transparent; border-color: transparent; color: var(--suave);
+  font-size: .8rem; font-weight: 500; text-decoration: underline;
+}
+.ligacao:hover:not(:disabled) { color: var(--neon); filter: none; }
+
+/* "Google conectado" - a confirmacao verde do passo 3 do cadastro */
+.conectado { margin: .5rem 0 0; font-size: .82rem; color: var(--verde); text-align: center; }
+
+.sem-google {
+  margin: 1rem 0 0; padding: .7rem .8rem; border-radius: 10px;
+  background: rgba(224,82,99,.12); border: 1px solid rgba(224,82,99,.4);
+  font-size: .8rem; line-height: 1.45; color: var(--texto);
+}
 
 /* "Jogando como Victor [sair]" */
 .quem {

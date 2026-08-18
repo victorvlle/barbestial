@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Bar Bestial — administração</title>
+<style>
+  /* Mesma paleta do jogo, num arquivo só: este painel não carrega nada de fora. */
+  :root {
+    --noite:#0d1017; --painel:#191f2b; --borda:#2e3546; --texto:#edf1f8;
+    --suave:#93a0b8; --neon:#f2b134; --verde:#5cc98a; --vermelho:#e05263;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; min-height:100vh; color:var(--texto); font-size:14px;
+    font-family: system-ui, "Segoe UI", sans-serif;
+    background: radial-gradient(1200px 700px at 50% 0%, #1c2433, var(--noite));
+    background-attachment: fixed;
+  }
+  header { display:flex; align-items:center; gap:.8rem; padding:1rem 1.2rem; flex-wrap:wrap; }
+  h1 { font-size:1.1rem; margin:0; color:#ffe9c2; letter-spacing:.05em; }
+  .selo { font-size:.7rem; padding:.15rem .55rem; border-radius:999px; border:1px solid var(--borda); color:var(--suave); }
+  main { padding:0 1.2rem 2rem; display:grid; gap:1.2rem; max-width:1100px; }
+
+  .caixa { padding:1rem 1.1rem; border-radius:14px; background:linear-gradient(180deg,#212838,var(--painel)); border:1px solid var(--borda); }
+  h2 { font-size:.72rem; text-transform:uppercase; letter-spacing:.14em; color:var(--suave); margin:0 0 .7rem; }
+
+  input, button {
+    padding:.6rem .8rem; border-radius:9px; border:1px solid var(--borda);
+    background:#12161f; color:var(--texto); font-family:inherit; font-size:.95rem;
+  }
+  button { background:#262d3d; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.25); }
+  .principal { background:linear-gradient(180deg,var(--neon),#ff9f43); color:#23180a; border-color:transparent; }
+
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th { text-align:left; font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--suave); font-weight:600; padding:.35rem .5rem; border-bottom:1px solid var(--borda); }
+  td { padding:.45rem .5rem; border-bottom:1px solid #222836; }
+  tr:last-child td { border-bottom:none; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .apagado { color:var(--suave); font-size:.78rem; }
+  .cod { font-family: ui-monospace, Consolas, monospace; font-size:.72rem; color:var(--suave); }
+  .marca { display:inline-block; padding:.05rem .45rem; border-radius:999px; font-size:.68rem; border:1px solid var(--borda); color:var(--suave); }
+  .marca--google { color:var(--verde); border-color:rgba(92,201,138,.45); }
+  .pontos { color:var(--neon); font-weight:700; }
+  .aviso { color:var(--vermelho); min-height:1.2rem; margin:.6rem 0 0; }
+  .vazio { color:var(--suave); padding:.6rem .2rem; }
+  .rolagem { max-height:420px; overflow-y:auto; }
+  .entrada { max-width:380px; margin:8vh auto; }
+  .entrada label { display:block; font-size:.8rem; color:var(--suave); margin-bottom:.35rem; }
+  .entrada input, .entrada button { width:100%; }
+  .entrada button { margin-top:.7rem; }
+  .escondido { display:none; }
+  .cabecalhos { display:flex; gap:1.4rem; flex-wrap:wrap; }
+  .cabecalhos div { font-size:.75rem; color:var(--suave); }
+  .cabecalhos strong { display:block; font-size:1.5rem; color:var(--texto); font-weight:800; }
+</style>
+</head>
+<body>
+
+<!-- Porta de entrada. A senha nunca vai na URL: seria gravada no histórico do
+     navegador e nos registros de acesso do servidor. Vai num cabeçalho. -->
+<div class="entrada caixa" id="entrada">
+  <h2>Administração</h2>
+  <label for="senha">Senha de administrador</label>
+  <input id="senha" type="password" autocomplete="off" placeholder="ADMIN_SEGREDO" />
+  <button class="principal" id="entrar">Entrar</button>
+  <p class="aviso" id="aviso"></p>
+</div>
+
+<div id="painel" class="escondido">
+  <header>
+    <h1>Bar Bestial — administração</h1>
+    <span class="selo" id="atualizado">—</span>
+    <span style="margin-left:auto"></span>
+    <button id="recarregar">Atualizar</button>
+    <button id="sair">Sair</button>
+  </header>
+
+  <main>
+    <div class="caixa cabecalhos" id="totais"></div>
+
+    <div class="caixa">
+      <h2>Contas cadastradas (<span id="conta-contas">0</span>)</h2>
+      <div class="rolagem"><table>
+        <thead><tr>
+          <th>Apelido</th><th>Google conectado</th><th>Cadastro</th><th>Último acesso</th>
+          <th class="num">Partidas</th><th class="num">Pontos totais</th>
+        </tr></thead>
+        <tbody id="contas"></tbody>
+      </table></div>
+    </div>
+
+    <div class="caixa">
+      <h2>Ranking da semana <span id="semana-atual" class="apagado"></span></h2>
+      <table><tbody id="ranking"></tbody></table>
+    </div>
+
+    <div class="caixa">
+      <h2>Últimas partidas</h2>
+      <div class="rolagem"><table>
+        <thead><tr><th>Quando</th><th>Sala</th><th>Quem jogou</th></tr></thead>
+        <tbody id="partidas"></tbody>
+      </table></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// Tudo aqui usa textContent, nunca innerHTML com dado do banco: nomes vêm de
+// outras pessoas, e um nome com HTML dentro não pode virar código nesta página.
+const $ = (id) => document.getElementById(id);
+const CHAVE = 'barbestial:admin';
+let senha = sessionStorage.getItem(CHAVE) || '';
+let timer = null;
+
+const quando = (t) => t ? new Date(t).toLocaleString('pt-BR') : '—';
+
+async function buscar() {
+  const r = await fetch('/api/admin/dados', { headers: { Authorization: 'Bearer ' + senha } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || 'Não autorizado.');
+  return r.json();
+}
+
+function celula(linha, texto, classe) {
+  const td = document.createElement('td');
+  td.textContent = texto;
+  if (classe) td.className = classe;
+  linha.appendChild(td);
+  return td;
+}
+
+function desenhar(d) {
+  $('atualizado').textContent = 'atualizado ' + new Date(d.agora).toLocaleTimeString('pt-BR');
+
+  $('totais').innerHTML = '';
+  const resumo = [
+    ['Contas', d.totais.contas],
+    ['Partidas', d.totais.partidas],
+    ['Semanas com jogo', d.totais.semanas.length],
+    ['Semana atual', d.semana.chave],
+  ];
+  for (const [rotulo, valor] of resumo) {
+    const bloco = document.createElement('div');
+    const forte = document.createElement('strong');
+    forte.textContent = valor;
+    bloco.append(forte, document.createTextNode(rotulo));
+    $('totais').appendChild(bloco);
+  }
+
+  // contas
+  $('conta-contas').textContent = d.contas.length;
+  $('contas').innerHTML = '';
+  if (!d.contas.length) {
+    const l = document.createElement('tr');
+    celula(l, 'Ninguém se cadastrou ainda.', 'vazio').colSpan = 6;
+    $('contas').appendChild(l);
+  }
+  for (const c of d.contas) {
+    const l = document.createElement('tr');
+    const nome = celula(l, c.nome);
+    const id = document.createElement('div');
+    id.className = 'cod';
+    id.textContent = c.id;
+    nome.appendChild(id);
+
+    // O e-mail do Google mostra QUAL conta está conectada - é ela que serve de
+    // prova na hora de recuperar a senha.
+    const google = celula(l, '');
+    const marca = document.createElement('span');
+    marca.className = 'marca marca--google';
+    marca.textContent = c.google_email || 'conectado';
+    google.appendChild(marca);
+
+    celula(l, quando(c.criado_em), 'apagado');
+    const visto = celula(l, quando(c.visto_em), 'apagado');
+    // Senha trocada recentemente é o tipo de coisa que vale notar num painel.
+    if (c.senha_trocada_em) {
+      const troca = document.createElement('div');
+      troca.className = 'cod';
+      troca.textContent = 'senha trocada em ' + quando(c.senha_trocada_em);
+      visto.appendChild(troca);
+    }
+    celula(l, c.partidas, 'num');
+    celula(l, c.pontosTotais, 'num');
+    $('contas').appendChild(l);
+  }
+
+  // ranking
+  $('semana-atual').textContent = d.semanaConsultada;
+  $('ranking').innerHTML = '';
+  if (!d.ranking.length) {
+    const l = document.createElement('tr');
+    celula(l, 'Nenhuma partida nesta semana.', 'vazio').colSpan = 4;
+    $('ranking').appendChild(l);
+  }
+  for (const j of d.ranking) {
+    const l = document.createElement('tr');
+    celula(l, j.posicao + 'º');
+    celula(l, j.nome);
+    celula(l, j.pontos + ' pts', 'num pontos');
+    celula(l, j.partidas + ' partida(s), ' + j.vitorias + ' vitória(s)', 'apagado');
+    $('ranking').appendChild(l);
+  }
+
+  // partidas
+  $('partidas').innerHTML = '';
+  if (!d.partidas.length) {
+    const l = document.createElement('tr');
+    celula(l, 'Nenhuma partida registrada.', 'vazio').colSpan = 3;
+    $('partidas').appendChild(l);
+  }
+  for (const p of d.partidas) {
+    const l = document.createElement('tr');
+    celula(l, quando(p.terminou_em), 'apagado');
+    celula(l, p.sala || '—', 'cod');
+    celula(l, p.quem || '—');
+    $('partidas').appendChild(l);
+  }
+}
+
+async function carregar() {
+  try {
+    desenhar(await buscar());
+  } catch (e) {
+    clearInterval(timer);
+    mostrarEntrada(e.message);
+  }
+}
+
+function mostrarPainel() {
+  $('entrada').classList.add('escondido');
+  $('painel').classList.remove('escondido');
+  carregar();
+  clearInterval(timer);
+  timer = setInterval(carregar, 15000); // acompanha os cadastros ao vivo
+}
+
+function mostrarEntrada(mensagem) {
+  sessionStorage.removeItem(CHAVE);
+  senha = '';
+  $('painel').classList.add('escondido');
+  $('entrada').classList.remove('escondido');
+  $('aviso').textContent = mensagem || '';
+}
+
+$('entrar').addEventListener('click', async () => {
+  senha = $('senha').value;
+  try {
+    desenhar(await buscar());
+    sessionStorage.setItem(CHAVE, senha);
+    mostrarPainel();
+  } catch (e) {
+    $('aviso').textContent = e.message;
+  }
+});
+$('senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('entrar').click(); });
+$('recarregar').addEventListener('click', carregar);
+$('sair').addEventListener('click', () => { clearInterval(timer); mostrarEntrada(''); });
+
+// Já entrou nesta aba antes? Entra direto. A senha vive em sessionStorage:
+// fechar a aba esquece.
+if (senha) mostrarPainel();
+</script>
+</body>
+</html>

@@ -33,8 +33,44 @@ function abrir(caminho = process.env.BANCO_CAMINHO || CAMINHO_PADRAO) {
   if (caminho !== ':memory:') db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
+  recriarSeForOEsquemaAntigo(db);
   criarEsquema(db);
   return db;
+}
+
+// ---------------------------------------------------------------- migracao
+//
+// A primeira versao das contas permitia entrar SO pelo Google ou SO por senha
+// (havia uma coluna 'provedor'). Agora as tres coisas - apelido, senha e conta
+// do Google - sao obrigatorias juntas, porque e o Google que serve de prova de
+// identidade na hora de recuperar a senha.
+//
+// As contas antigas nao tem como ser convertidas: falta justamente o dado que
+// virou obrigatorio. Por isso, ao encontrar o formato antigo, comecamos limpo.
+// Isso foi combinado enquanto o jogo ainda estava em fase de testes.
+//
+// A checagem e pelo FORMATO, nao por uma data ou um contador: rodar duas vezes
+// nao apaga nada na segunda, porque na segunda o formato antigo ja nao existe.
+function recriarSeForOEsquemaAntigo(banco) {
+  const existe = banco
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='usuarios'")
+    .get();
+  if (!existe) return;
+
+  const colunas = banco.prepare('PRAGMA table_info(usuarios)').all().map((c) => c.name);
+  if (!colunas.includes('provedor')) return; // ja esta no formato novo
+
+  console.warn(
+    '[banco] contas no formato antigo encontradas. Recriando do zero: ' +
+      'agora apelido, senha e Google são obrigatórios juntos e as contas ' +
+      'antigas não têm conta do Google conectada.'
+  );
+
+  banco.exec(`
+    DROP TABLE IF EXISTS resultados;
+    DROP TABLE IF EXISTS partidas;
+    DROP TABLE IF EXISTS usuarios;
+  `);
 }
 
 // ---------------------------------------------------------------- esquema
@@ -44,19 +80,31 @@ function abrir(caminho = process.env.BANCO_CAMINHO || CAMINHO_PADRAO) {
 
 function criarEsquema(banco) {
   banco.exec(`
-    -- Uma linha por conta. 'provedor' diz de onde ela veio:
-    --   'google' -> provedor_id e o "sub" que o Google devolve (nunca muda)
-    --   'local'  -> provedor_id e o apelido em minusculas, e a senha fica aqui
+    -- Uma linha por conta. As TRES formas de identificacao sao obrigatorias
+    -- (NOT NULL) e cada uma tem um papel diferente:
+    --
+    --   apelido    -> o login do dia a dia e o nome que aparece no ranking
+    --   senha      -> guardada como scrypt(senha, sal); a senha em si nao existe
+    --   google_sub -> o identificador permanente da conta Google
+    --
+    -- POR QUE O GOOGLE E OBRIGATORIO: ele e a UNICA prova aceita para recuperar
+    -- a senha. Saber o apelido de alguem nao da acesso a nada - e preciso
+    -- entrar na conta do Google daquela pessoa. Sem isso, "esqueci a senha"
+    -- viraria uma porta destrancada para quem conhecesse o apelido.
+    --
+    -- apelido_chave e o apelido em minusculas: e nele que a unicidade e a busca
+    -- acontecem, para "Victor" e "victor" nao virarem duas contas.
     CREATE TABLE IF NOT EXISTS usuarios (
-      id          TEXT PRIMARY KEY,
-      provedor    TEXT NOT NULL,
-      provedor_id TEXT NOT NULL,
-      nome        TEXT NOT NULL,
-      senha_hash  TEXT,
-      senha_sal   TEXT,
-      criado_em   INTEGER NOT NULL,
-      visto_em    INTEGER NOT NULL,
-      UNIQUE (provedor, provedor_id)
+      id             TEXT PRIMARY KEY,
+      apelido        TEXT NOT NULL,
+      apelido_chave  TEXT NOT NULL UNIQUE,
+      senha_hash     TEXT NOT NULL,
+      senha_sal      TEXT NOT NULL,
+      google_sub     TEXT NOT NULL UNIQUE,
+      google_email   TEXT,
+      criado_em      INTEGER NOT NULL,
+      visto_em       INTEGER NOT NULL,
+      senha_trocada_em INTEGER
     );
 
     -- Uma linha por partida CONCLUIDA. O id e o partidaId que o proprio jogo ja

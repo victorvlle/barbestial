@@ -14,38 +14,15 @@ const ranking = require('../server/dados/ranking');
 const { criarEstado, jogarCarta, calcularResultado } = require('../server/game/gameState');
 
 let contador = 0;
-const conta = (nome) => usuarios.criarContaLocal(`${nome}${++contador}`, 'senha1234');
 
-// ============================================================ 1. contas
+// Uma conta completa: apelido + senha + Google. Os tres sao obrigatorios.
+const google = (nome) => ({ sub: `google-${nome}`, email: `${nome}@exemplo.test` });
+const conta = (nome, senha = 'senha1234') => {
+  const apelido = `${nome}${++contador}`;
+  return usuarios.criarConta({ apelido, senha, google: google(apelido) });
+};
 
-test('cria uma conta e entra com ela', () => {
-  const criada = usuarios.criarContaLocal('Victor', 'batatinha');
-  assert.strictEqual(criada.nome, 'Victor');
-  assert.strictEqual(criada.provedor, 'local');
-  assert.ok(criada.id, 'a conta precisa de um identificador único');
-
-  const entrou = usuarios.entrarComSenha('Victor', 'batatinha');
-  assert.strictEqual(entrou.id, criada.id, 'entrar tem que achar a MESMA conta');
-});
-
-test('o apelido não diferencia maiúsculas, mas o nome exibido é preservado', () => {
-  const criada = usuarios.criarContaLocal('Jorge', 'senha1234');
-  assert.strictEqual(usuarios.entrarComSenha('JORGE', 'senha1234').id, criada.id);
-  assert.strictEqual(criada.nome, 'Jorge');
-});
-
-test('a senha nunca é guardada em texto puro', () => {
-  const criada = usuarios.criarContaLocal('Segredo', 'minhasenha');
-  assert.ok(criada.senha_hash && criada.senha_hash !== 'minhasenha');
-  assert.ok(criada.senha_sal, 'cada conta tem o próprio sal');
-
-  // Duas contas com a MESMA senha têm hashes diferentes - é para isso que
-  // serve o sal: uma tabela de senhas prontas não serve para nada.
-  const outra = usuarios.criarContaLocal('Segredo2', 'minhasenha');
-  assert.notStrictEqual(criada.senha_hash, outra.senha_hash);
-});
-
-// Roda a função e devolve o erro que ela lançou (ou null).
+// Roda a funcao e devolve o erro que ela lancou (ou null).
 function oQueDeuErrado(acao) {
   try {
     acao();
@@ -55,9 +32,91 @@ function oQueDeuErrado(acao) {
   }
 }
 
+// ============================================================ 1. cadastro
+
+test('cria uma conta com apelido, senha e Google, e entra com ela', () => {
+  const criada = usuarios.criarConta({
+    apelido: 'Victor',
+    senha: 'batatinha',
+    google: google('victor'),
+  });
+  assert.strictEqual(criada.apelido, 'Victor');
+  assert.ok(criada.id, 'a conta precisa de um identificador único');
+  assert.ok(criada.google_sub, 'e do Google conectado');
+
+  const entrou = usuarios.entrarComSenha('Victor', 'batatinha');
+  assert.strictEqual(entrou.id, criada.id, 'entrar tem que achar a MESMA conta');
+});
+
+test('sem Google não existe cadastro', () => {
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'SemGoogle', senha: 'senha1234', google: null })
+  );
+  assert.match(erro.message, /Google/);
+  assert.strictEqual(usuarios.porApelido('SemGoogle'), null, 'e a conta não foi criada');
+});
+
+test('sem senha não existe cadastro', () => {
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'SemSenha', senha: '', google: google('semsenha') })
+  );
+  assert.match(erro.message, /senha/i);
+  assert.strictEqual(usuarios.porApelido('SemSenha'), null);
+});
+
+test('sem apelido não existe cadastro', () => {
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'ab', senha: 'senha1234', google: google('ab') })
+  );
+  assert.match(erro.message, /apelido/i);
+});
+
+test('o apelido não diferencia maiúsculas, mas o nome exibido é preservado', () => {
+  const criada = usuarios.criarConta({ apelido: 'Jorge', senha: 'senha1234', google: google('jorge') });
+  assert.strictEqual(usuarios.entrarComSenha('JORGE', 'senha1234').id, criada.id);
+  assert.strictEqual(criada.apelido, 'Jorge');
+});
+
+test('apelido repetido é recusado', () => {
+  usuarios.criarConta({ apelido: 'Repetido', senha: 'senha1234', google: google('r1') });
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'repetido', senha: 'outra1234', google: google('r2') })
+  );
+  assert.match(erro.message, /já está em uso/);
+});
+
+test('a mesma conta do Google não pode virar dois apelidos', () => {
+  const mesmoGoogle = google('unico');
+  usuarios.criarConta({ apelido: 'PrimeiroNome', senha: 'senha1234', google: mesmoGoogle });
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'SegundoNome', senha: 'senha1234', google: mesmoGoogle })
+  );
+  assert.match(erro.message, /já está ligada/);
+});
+
+test('apelido com símbolos estranhos é recusado', () => {
+  const erro = oQueDeuErrado(() =>
+    usuarios.criarConta({ apelido: 'a b<c>', senha: 'senha1234', google: google('xx') })
+  );
+  assert.match(erro.message, /letras/i);
+});
+
+// ============================================================ 2. senhas
+
+test('a senha nunca é guardada em texto puro', () => {
+  const criada = conta('Segredo', 'minhasenha');
+  assert.ok(criada.senha_hash && criada.senha_hash !== 'minhasenha');
+  assert.ok(criada.senha_sal, 'cada conta tem o próprio sal');
+
+  // Duas contas com a MESMA senha têm hashes diferentes - é para isso que
+  // serve o sal: uma tabela de senhas prontas não serve para nada.
+  const outra = conta('Segredo', 'minhasenha');
+  assert.notStrictEqual(criada.senha_hash, outra.senha_hash);
+});
+
 test('senha errada não entra, e o erro não revela se a conta existe', () => {
-  usuarios.criarContaLocal('Maria', 'certa1234');
-  const erroSenha = oQueDeuErrado(() => usuarios.entrarComSenha('Maria', 'errada'));
+  const criada = conta('Maria', 'certa1234');
+  const erroSenha = oQueDeuErrado(() => usuarios.entrarComSenha(criada.apelido, 'errada'));
   const erroConta = oQueDeuErrado(() => usuarios.entrarComSenha('NinguemAssim', 'errada'));
 
   assert.ok(erroSenha && erroConta, 'os dois casos precisam recusar');
@@ -68,32 +127,91 @@ test('senha errada não entra, e o erro não revela se a conta existe', () => {
   );
 });
 
-test('não dá para criar duas contas com o mesmo apelido', () => {
-  usuarios.criarContaLocal('Repetido', 'senha1234');
-  assert.throws(() => usuarios.criarContaLocal('repetido', 'outra1234'), /Já existe/);
-});
-
-test('nome curto demais e senha curta demais são recusados', () => {
-  assert.throws(() => usuarios.criarContaLocal('a', 'senha1234'), /pelo menos 2/);
-  assert.throws(() => usuarios.criarContaLocal('Nome', '123'), /pelo menos 4/);
-});
-
-test('o que vai para o cliente não leva hash nem sal', () => {
-  const criada = usuarios.criarContaLocal('Publico', 'senha1234');
+test('o que vai para o cliente não leva hash, sal nem o sub do Google', () => {
+  const criada = conta('Publico');
   const enviado = usuarios.paraOCliente(criada);
-  assert.deepStrictEqual(Object.keys(enviado).sort(), ['id', 'nome', 'provedor']);
+  assert.deepStrictEqual(Object.keys(enviado).sort(), ['id', 'nome', 'temGoogle']);
+  assert.ok(!JSON.stringify(enviado).includes('google-'), 'o sub do Google não sai daqui');
 });
 
-// ============================================================ 2. sessao
+// ============================================================ 3. entrar pelo Google
+
+test('quem já tem conta entra com um clique no Google', () => {
+  const criada = usuarios.criarConta({ apelido: 'PeloGoogle', senha: 'senha1234', google: google('pg') });
+  const entrou = usuarios.entrarComGoogle(google('pg'));
+  assert.strictEqual(entrou.id, criada.id);
+});
+
+test('entrar pelo Google NÃO cria conta sozinho', () => {
+  const erro = oQueDeuErrado(() => usuarios.entrarComGoogle(google('desconhecido')));
+  assert.match(erro.message, /Crie sua conta/);
+  assert.strictEqual(usuarios.porGoogle('google-desconhecido'), null, 'nada foi criado');
+});
+
+// ============================================================ 4. recuperação
+
+test('quem tem o Google da conta define uma senha nova e entra', () => {
+  const criada = usuarios.criarConta({ apelido: 'Esquecido', senha: 'velha1234', google: google('esq') });
+
+  const depois = usuarios.trocarSenhaComGoogle(google('esq'), 'nova12345');
+  assert.strictEqual(depois.id, criada.id);
+  assert.ok(depois.senha_trocada_em, 'a troca fica registrada');
+
+  assert.ok(usuarios.entrarComSenha('Esquecido', 'nova12345'), 'a senha nova funciona');
+  assert.ok(
+    oQueDeuErrado(() => usuarios.entrarComSenha('Esquecido', 'velha1234')),
+    'e a antiga deixa de funcionar'
+  );
+});
+
+test('SABER O APELIDO NÃO RECUPERA NADA', () => {
+  // O ponto central do desenho: a função de recuperação não tem nem por onde
+  // receber um apelido. A conta é encontrada pelo Google, e por mais nada.
+  usuarios.criarConta({ apelido: 'Alvo', senha: 'senha1234', google: google('alvo') });
+
+  // Um atacante que conhece o apelido "Alvo" e traz o PRÓPRIO Google:
+  const atacante = usuarios.criarConta({
+    apelido: 'Atacante',
+    senha: 'senha1234',
+    google: google('atacante'),
+  });
+  const mexeu = usuarios.trocarSenhaComGoogle(google('atacante'), 'senha-do-atacante');
+
+  assert.strictEqual(mexeu.id, atacante.id, 'ele só consegue trocar a própria senha');
+  assert.ok(
+    usuarios.entrarComSenha('Alvo', 'senha1234'),
+    'a senha da vítima continua valendo'
+  );
+});
+
+test('Google sem conta não troca senha nenhuma', () => {
+  const erro = oQueDeuErrado(() => usuarios.trocarSenhaComGoogle(google('ninguem'), 'nova12345'));
+  assert.match(erro.message, /Crie sua conta/);
+});
+
+test('recuperação também exige senha nova válida', () => {
+  usuarios.criarConta({ apelido: 'Curta', senha: 'senha1234', google: google('curta') });
+  const erro = oQueDeuErrado(() => usuarios.trocarSenhaComGoogle(google('curta'), '123'));
+  assert.match(erro.message, /pelo menos/);
+});
+
+test('trocar a senha estando logado exige a senha atual', () => {
+  const criada = conta('Troca', 'atual1234');
+  assert.ok(oQueDeuErrado(() => usuarios.trocarSenha(criada.id, 'chutei', 'nova12345')));
+  usuarios.trocarSenha(criada.id, 'atual1234', 'nova12345');
+  assert.ok(usuarios.entrarComSenha(criada.apelido, 'nova12345'));
+});
+
+// ============================================================ 5. sessao
 
 test('a sessão identifica o dono e sobrevive a um F5', () => {
-  const criada = usuarios.criarContaLocal('Sessao', 'senha1234');
+  const criada = conta('Sessao');
   const token = usuarios.criarSessao(criada.id);
   assert.strictEqual(usuarios.lerSessao(token).id, criada.id);
 });
 
 test('token adulterado, vencido ou inventado não vale', () => {
-  const criada = usuarios.criarContaLocal('Cracha', 'senha1234');
+  const criada = conta('Cracha');
   const token = usuarios.criarSessao(criada.id);
 
   assert.strictEqual(usuarios.lerSessao(token.replace(/.$/, '0')), null, 'assinatura mexida');
@@ -103,7 +221,7 @@ test('token adulterado, vencido ou inventado não vale', () => {
 
   // Trocar o id mantendo a assinatura antiga também não passa: a assinatura
   // cobre o id, então virar a conta de outra pessoa é impossível.
-  const outro = usuarios.criarContaLocal('Outro', 'senha1234');
+  const outro = conta('Outro');
   const [, expira, assinatura] = token.split('.');
   assert.strictEqual(usuarios.lerSessao(`${outro.id}.${expira}.${assinatura}`), null);
 
@@ -208,9 +326,9 @@ test('uma partida vira pontos das pessoas certas', () => {
     partidaId: 'partida-basica',
     sala: 'AB12',
     resultado: resultadoCom([
-      { id: ana.id, nome: ana.nome, entraram: 4, somaForcas: 30 },
-      { id: bento.id, nome: bento.nome, entraram: 2, somaForcas: 12 },
-      { id: clara.id, nome: clara.nome, entraram: 1, somaForcas: 9 },
+      { id: ana.id, nome: ana.apelido, entraram: 4, somaForcas: 30 },
+      { id: bento.id, nome: bento.apelido, entraram: 2, somaForcas: 12 },
+      { id: clara.id, nome: clara.apelido, entraram: 1, somaForcas: 9 },
     ]),
   });
 
@@ -311,8 +429,8 @@ test('uma partida de verdade, do início ao fim, vira pontos', () => {
   // O id da conta é o id do jogador dentro do jogo - é isso que amarra a
   // partida à pessoa sem nenhuma tradução no meio.
   const estado = criarEstado([
-    { id: ana.id, nome: ana.nome },
-    { id: bento.id, nome: bento.nome },
+    { id: ana.id, nome: ana.apelido },
+    { id: bento.id, nome: bento.apelido },
   ]);
 
   let guarda = 0;

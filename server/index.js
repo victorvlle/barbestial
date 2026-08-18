@@ -13,6 +13,7 @@ const { salas } = require('./game/room');
 const { abrir } = require('./dados/banco');
 const { lerSessao, paraOCliente } = require('./dados/usuarios');
 const { router: rotasDeConta } = require('./rotas/contas');
+const admin = require('./rotas/admin');
 
 const salasAtivas = () => salas.size;
 
@@ -35,6 +36,14 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Contas e ranking. Ver server/rotas/contas.js.
 app.use('/api', rotasDeConta);
+
+// Painel de administracao. So e montado se ADMIN_SEGREDO existir: sem a
+// variavel, /admin responde 404 como qualquer endereco inventado - e nao como
+// uma porta destrancada.
+if (admin.ligado()) {
+  app.use('/', admin.router);
+  console.log('[admin] painel disponível em /admin');
+}
 
 // O cliente busca a lista de animais daqui, em vez de ter uma copia propria.
 // Assim cards.js continua sendo a unica fonte de verdade sobre as cartas.
