@@ -11,13 +11,14 @@
 // As imagens shot-*.png ficam na raiz do projeto depois da execucao.
 
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 
 const PORTA = 3998;
 const url = `http://localhost:${PORTA}`;
 const raiz = path.join(__dirname, '..');
-const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -45,13 +46,13 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   await bruno.goto(url);
   await espera(600);
 
-  await ana.fill('#nome', 'Ana');
+  await entrarNoJogo(ana, 'Ana');
   await ana.click('#btn-criar');
   await espera(400);
   const codigo = (await ana.textContent('#codigo-sala')).trim();
   check(/^[A-Z0-9]{4}$/.test(codigo), `sala criada na tela: ${codigo}`);
 
-  await bruno.fill('#nome', 'Bruno');
+  await entrarNoJogo(bruno, 'Bruno');
   await bruno.fill('#codigo', codigo);
   await bruno.click('#btn-entrar');
   await espera(400);

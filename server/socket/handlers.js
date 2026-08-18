@@ -11,6 +11,7 @@ const {
   jogadaAleatoria,
   LIMITE_DO_TURNO_MS,
 } = require('../game/gameState');
+const ranking = require('../dados/ranking');
 
 // Um relogio por sala. Se o jogador da vez nao jogar dentro do limite, o
 // servidor joga uma carta qualquer por ele - senao a partida inteira trava
@@ -24,6 +25,38 @@ function cancelarRelogio(codigo) {
 
 function avisarSala(io, s) {
   io.to(s.codigo).emit('sala-atualizada', sala.resumoDaSala(s));
+}
+
+// ------------------------------------------------------------ fim de partida
+//
+// Uma partida terminada vira pontos no ranking. Chamamos isto em TODO lugar
+// onde uma jogada pode ter sido a ultima - inclusive na jogada automatica do
+// relogio, senao uma partida decidida no estouro do tempo nao contaria.
+//
+// Chamar duas vezes e inofensivo de proposito: quem garante isso e o banco (o
+// id da partida e chave primaria), nao uma flag que poderia se perder num
+// reinicio. Ver registrarPartida em dados/ranking.js.
+function registrarSeAcabou(io, s) {
+  if (!s.estado || s.estado.fase !== 'terminado' || !s.estado.resultado) return;
+
+  try {
+    const gravado = ranking.registrarPartida({
+      partidaId: s.estado.partidaId,
+      sala: s.codigo,
+      resultado: s.estado.resultado,
+    });
+    // So avisa a todos quando a partida entrou agora: repetir o aviso a cada
+    // reconexao encheria a tela de todo mundo de atualizacoes iguais.
+    if (gravado.novo) {
+      io.emit('ranking-atualizado', {
+        semana: ranking.semanaAtual(),
+        ranking: ranking.rankingDaSemana(),
+      });
+    }
+  } catch (erro) {
+    // O ranking e um extra: se ele falhar, a partida continua valendo na tela.
+    console.error('[ranking] não foi possível registrar a partida:', erro);
+  }
 }
 
 // Cada jogador recebe uma versao diferente do estado: so ele ve a propria mao.
@@ -70,6 +103,7 @@ function agendarRelogio(io, s) {
           dono: jogada.jogadorId,
         });
         avisarEstado(io, viva); // reagenda sozinho para o proximo jogador
+        registrarSeAcabou(io, viva); // a jogada do relogio pode ter sido a ultima
       } catch (erro) {
         console.error('[relogio]', erro);
       }
@@ -90,18 +124,28 @@ function responder(acao, resposta) {
 }
 
 module.exports = function registrarHandlers(io, socket) {
-  socket.on('criar-sala', ({ jogadorId, nome } = {}, resposta) => {
+  // QUEM E VOCE vem do cracha conferido no handshake (ver server/index.js), e
+  // nunca do que o cliente digitou. Os handlers abaixo ignoram qualquer
+  // `jogadorId` ou `nome` enviado pelo navegador - e essa a garantia de que a
+  // partida registrada no ranking pertence mesmo a esta conta.
+  const eu = () => ({
+    id: socket.data.usuario.id,
+    nome: socket.data.usuario.nome,
+    socketId: socket.id,
+  });
+
+  socket.on('criar-sala', (_dados, resposta) => {
     responder(() => {
-      const s = sala.criarSala({ id: jogadorId, nome, socketId: socket.id });
+      const s = sala.criarSala(eu());
       socket.join(s.codigo);
       avisarSala(io, s);
       return { sala: sala.resumoDaSala(s) };
     }, resposta);
   });
 
-  socket.on('entrar-sala', ({ codigo, jogadorId, nome } = {}, resposta) => {
+  socket.on('entrar-sala', ({ codigo } = {}, resposta) => {
     responder(() => {
-      const s = sala.entrarNaSala(codigo, { id: jogadorId, nome, socketId: socket.id });
+      const s = sala.entrarNaSala(codigo, eu());
       socket.join(s.codigo);
       avisarSala(io, s);
       avisarEstado(io, s); // caso seja uma reconexao no meio da partida
@@ -130,6 +174,7 @@ module.exports = function registrarHandlers(io, socket) {
       if (achado.espectador) throw new sala.ErroDeSala('Você está assistindo, não jogando.');
       jogarCarta(achado.sala.estado, achado.jogador.id, uid, escolha);
       avisarEstado(io, achado.sala);
+      registrarSeAcabou(io, achado.sala);
       return {};
     }, resposta);
   });

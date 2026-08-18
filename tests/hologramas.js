@@ -12,13 +12,14 @@
 //   8. desligando os hologramas, nao aparece nada
 
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 
 const raiz = path.join(__dirname, '..');
 const PORTA = 3987;
 const url = `http://localhost:${PORTA}`;
-const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
@@ -91,11 +92,11 @@ const CENAS = [
   check(palco && palco.cliques === 'none', `o palco não recebe clique (pointer-events: ${palco?.cliques})`);
 
   // ------------------------------------------------------ começa uma partida
-  await ana.fill('#nome', 'Ana');
+  await entrarNoJogo(ana, 'Ana');
   await ana.click('#btn-criar');
   await espera(500);
   const codigo = (await ana.textContent('#codigo-sala')).trim();
-  await bruno.fill('#nome', 'Bruno');
+  await entrarNoJogo(bruno, 'Bruno');
   await bruno.fill('#codigo', codigo);
   await bruno.click('#btn-entrar');
   await espera(400);

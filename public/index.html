@@ -15,11 +15,37 @@
     <button id="btn-ajuda" class="redondo" title="Instruções do jogo">?</button>
   </header>
 
+  <!-- TELA 0: login. Fica por cima de tudo até a pessoa entrar na conta. -->
+  <div class="login escondida" id="tela-login">
+    <div class="painel painel--login">
+      <h2 class="login-titulo">Entre para jogar</h2>
+      <p class="dica">Sua conta guarda suas partidas e sua pontuação da semana.</p>
+
+      <!-- Só aparece quando o servidor tem GOOGLE_CLIENT_ID configurado -->
+      <div class="bloco-google escondida" id="bloco-google">
+        <div id="botao-google"></div>
+        <div class="separador"><span>ou use um apelido</span></div>
+      </div>
+
+      <label for="login-nome">Apelido</label>
+      <input id="login-nome" maxlength="16" placeholder="Como aparece pros outros" autocomplete="username" />
+
+      <label for="login-senha">Senha</label>
+      <input id="login-senha" type="password" maxlength="64" placeholder="Pelo menos 4 caracteres" autocomplete="current-password" />
+
+      <button id="btn-login" class="principal">Entrar</button>
+      <button id="btn-criar-conta" class="secundario">Criar uma conta</button>
+
+      <p class="aviso" id="aviso-login"></p>
+    </div>
+  </div>
+
   <!-- TELA 1: entrada -->
   <section class="tela" id="tela-entrada">
     <div class="painel">
-      <label for="nome">Seu nome</label>
-      <input id="nome" maxlength="16" placeholder="Como aparece pros outros" autocomplete="off" />
+      <p class="quem">Jogando como <strong id="quem-sou">—</strong>
+        <button id="btn-sair-conta" class="fantasma">sair</button>
+      </p>
 
       <button id="btn-criar" class="principal">Criar uma sala</button>
 
@@ -44,6 +70,18 @@
         <button id="btn-instrucoes" class="secundario">Instruções</button>
       </div>
     </div>
+
+    <!-- Ranking da semana, no canto direito. Fora do caminho da área de jogo:
+         esta tela é o menu, e na mesa ele nem aparece. -->
+    <aside class="ranking" id="ranking">
+      <h2>🏆 Ranking da semana</h2>
+      <p class="ranking-periodo" id="ranking-periodo"></p>
+      <ol class="ranking-lista" id="ranking-lista"></ol>
+      <p class="ranking-regra">
+        Vitória vale mais em mesa cheia: 5/3/2/1 com 4 jogadores,
+        2/1/0 com 3 e 1/0 com 2. Zera toda segunda-feira.
+      </p>
+    </aside>
   </section>
 
   <!-- TELA 2: sala de espera -->
@@ -182,6 +220,11 @@
   <script src="/js/animacao.js"></script>
   <script src="/js/holograma.js"></script>
   <script src="/js/render.js"></script>
+  <!-- Antes de main.js: é main.js que, no fim, chama iniciarContas(). Os dois
+       arquivos abaixo só usam as variáveis de main.js dentro de funções, que
+       rodam depois — por isso a ordem funciona nos dois sentidos. -->
+  <script src="/js/ranking.js"></script>
+  <script src="/js/conta.js"></script>
   <script src="/js/main.js"></script>
 </body>
 </html>

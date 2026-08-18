@@ -1,6 +1,8 @@
 // Liga a pagina ao servidor e controla o fluxo de "jogar uma carta".
 
-const JOGADOR_ID = meuJogadorId();
+// Quem eu sou vem da conta (ver conta.js), nao mais de um id sorteado no
+// navegador. Comeca vazio: sem login nao ha jogo.
+let JOGADOR_ID = null;
 let salaAtual = null;
 let estadoAtual = null;
 
@@ -23,9 +25,7 @@ let relogio = null;
 socket.on('connect', () => {
   $('conexao').textContent = 'conectado';
   $('conexao').className = 'selo selo--on';
-  if (salaAtual) {
-    enviar('entrar-sala', { codigo: salaAtual, jogadorId: JOGADOR_ID, nome: meuNome.ler() });
-  }
+  if (salaAtual) enviar('entrar-sala', { codigo: salaAtual });
 });
 
 socket.on('disconnect', () => {
@@ -52,6 +52,7 @@ socket.on('sala-encerrada', ({ motivo }) => {
 });
 
 function voltarAoMenu(mensagem) {
+  carregarRanking(); // voltando ao menu, o ranking vem fresquinho
   clearInterval(relogio);
   $('relogio').classList.add('escondida');
   votei = false;
@@ -307,21 +308,16 @@ function fecharModal() {
 
 // ------------------------------------------------------------ botoes
 
+// O nome nao vai mais junto: o servidor ja sabe de quem e o socket.
 $('btn-criar').addEventListener('click', async () => {
-  const nome = $('nome').value.trim();
-  if (!nome) return avisar('aviso-entrada', 'Digite seu nome primeiro.');
-  meuNome.salvar(nome);
-  const r = await enviar('criar-sala', { jogadorId: JOGADOR_ID, nome });
+  const r = await enviar('criar-sala');
   avisar('aviso-entrada', r.ok ? '' : r.erro);
 });
 
 $('btn-entrar').addEventListener('click', async () => {
-  const nome = $('nome').value.trim();
   const codigo = $('codigo').value.trim().toUpperCase();
-  if (!nome) return avisar('aviso-entrada', 'Digite seu nome primeiro.');
   if (codigo.length !== 4) return avisar('aviso-entrada', 'O código tem 4 caracteres.');
-  meuNome.salvar(nome);
-  const r = await enviar('entrar-sala', { codigo, jogadorId: JOGADOR_ID, nome });
+  const r = await enviar('entrar-sala', { codigo });
   avisar('aviso-entrada', r.ok ? '' : r.erro);
 });
 
@@ -439,11 +435,21 @@ document.addEventListener('keydown', (e) => {
 
 // ------------------------------------------------------------ inicializacao
 
+$('btn-login').addEventListener('click', entrarComSenha);
+$('btn-criar-conta').addEventListener('click', criarConta);
+$('btn-sair-conta').addEventListener('click', sair);
+$('login-senha').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('btn-login').click();
+});
+
 carregarCatalogo();
 carregarMusica();
 pintarBotaoMudo();
 iniciarPalco();
-$('nome').value = meuNome.ler();
 $('opt-previa').checked = preferencias.previaLigada();
 $('opt-holo').checked = preferencias.holoLigado();
 mostrarTela('entrada');
+
+// Por ultimo: descobre se ja ha uma sessao guardada e decide entre a tela de
+// login e o menu. Tudo o que vem antes so prepara a pagina.
+iniciarContas();

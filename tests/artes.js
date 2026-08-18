@@ -1,11 +1,12 @@
 // Confere que cada carta na tela usa a arte do animal certo e que as 12 imagens
 // existem e carregam. E a checagem que amarra arte <-> id <-> forca.
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 const raiz = path.join(__dirname, '..');
 const PORTA = 3984, url = `http://localhost:${PORTA}`;
-const s = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -45,9 +46,9 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(antiga === 404, `a arte antiga (animais.svg) não é mais servida (HTTP ${antiga})`);
 
   // dentro do jogo: cada carta aponta para a arte do seu próprio animal
-  await ana.fill('#nome', 'Ana'); await ana.click('#btn-criar'); await espera(500);
+  await entrarNoJogo(ana, 'Ana'); await ana.click('#btn-criar'); await espera(500);
   const cod = (await ana.textContent('#codigo-sala')).trim();
-  await bruno.fill('#nome', 'Bruno'); await bruno.fill('#codigo', cod);
+  await entrarNoJogo(bruno, 'Bruno'); await bruno.fill('#codigo', cod);
   await bruno.click('#btn-entrar'); await espera(400);
   await ana.click('#btn-comecar'); await espera(900);
 

@@ -3,13 +3,14 @@
 const { io } = require('socket.io-client');
 const { spawn } = require('child_process');
 const path = require('path');
+const { jogador, ambienteDeTeste } = require('./ajuda');
 
 const PORTA = 3985;
 const LIMITE = 3000;
 const url = `http://localhost:${PORTA}`;
 const servidor = spawn('node', ['server/index.js'], {
   cwd: path.join(__dirname, '..'),
-  env: { ...process.env, PORT: PORTA, LIMITE_TURNO_MS: String(LIMITE) },
+  env: ambienteDeTeste(PORTA, { LIMITE_TURNO_MS: String(LIMITE) }),
 });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const pedir = (s, ev, d) => new Promise((r) => s.emit(ev, d, r));
@@ -18,15 +19,18 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
 
 (async () => {
   await espera(1500);
-  const ana = io(url), bruno = io(url);
+  const contaAna = await jogador(url, 'Ana');
+  const contaBruno = await jogador(url, 'Bruno');
+  const ana = contaAna.socket, bruno = contaBruno.socket;
+  const ID_ANA = contaAna.id;
   await espera(400);
 
   const estados = {};
   ana.on('estado-atualizado', (e) => { estados.ana = e; });
   bruno.on('estado-atualizado', (e) => { estados.bruno = e; });
 
-  const sala = await pedir(ana, 'criar-sala', { jogadorId: 'ana', nome: 'Ana' });
-  await pedir(bruno, 'entrar-sala', { codigo: sala.sala.codigo, jogadorId: 'bruno', nome: 'Bruno' });
+  const sala = await pedir(ana, 'criar-sala', {});
+  await pedir(bruno, 'entrar-sala', { codigo: sala.sala.codigo });
   await pedir(ana, 'iniciar-partida', {});
   await espera(300);
 
@@ -50,8 +54,8 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(estados.ana.jogadas > jogadasAntes, 'e continua jogando sozinho no turno seguinte');
 
   // quem joga a tempo reinicia o relógio
-  const daVez = estados.ana.vezDe === 'ana' ? ana : bruno;
-  const visao = estados.ana.vezDe === 'ana' ? estados.ana : estados.bruno;
+  const daVez = estados.ana.vezDe === ID_ANA ? ana : bruno;
+  const visao = estados.ana.vezDe === ID_ANA ? estados.ana : estados.bruno;
   const mao = visao.jogadores.find((j) => j.id === visao.vezDe).mao;
   if (mao && mao.length) {
     const antes = estados.ana.turno.restanteMs;

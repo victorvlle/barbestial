@@ -1,7 +1,24 @@
 // Toda conversa com o servidor passa por aqui.
 // O cliente so envia intencoes; quem decide qualquer coisa e o servidor.
 
-const socket = io();
+// O cracha da sessao mora aqui. Guardado no navegador para o jogador nao ter
+// que entrar de novo a cada F5; quem confere se ele vale e o servidor.
+const sessao = {
+  ler: () => localStorage.getItem('barbestial:sessao') || '',
+  salvar: (token) => localStorage.setItem('barbestial:sessao', token),
+  apagar: () => localStorage.removeItem('barbestial:sessao'),
+};
+
+// O socket nasce DESLIGADO: sem conta, nao ha o que conversar com o servidor.
+// Quem liga e conta.js, depois do login.
+//
+// `auth` e uma funcao, e nao um objeto pronto, de proposito: o Socket.IO a
+// chama a cada (re)conexao. Assim uma queda de internet depois de trocar de
+// conta reconecta com o cracha certo, sem ninguem precisar lembrar disso.
+const socket = io({
+  autoConnect: false,
+  auth: (feito) => feito({ token: sessao.ler() }),
+});
 
 // enviar() transforma o "acknowledgement" do Socket.IO em Promise,
 // para dar para escrever: const r = await enviar('criar-sala', {...})
@@ -9,15 +26,22 @@ function enviar(evento, dados = {}) {
   return new Promise((resolve) => socket.emit(evento, dados, resolve));
 }
 
-// Identidade que sobrevive a um F5. Sem isso, recarregar a pagina viraria
-// um jogador novo e a partida ficaria com fantasmas na sala.
-function meuJogadorId() {
-  let id = localStorage.getItem('barbestial:jogadorId');
-  if (!id) {
-    id = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
-    localStorage.setItem('barbestial:jogadorId', id);
+// Pedido HTTP com o cracha junto. E o mesmo formato de resposta do socket:
+// { ok: true, ... } ou { ok: false, erro }.
+async function pedir(caminho, { metodo = 'GET', corpo } = {}) {
+  try {
+    const resposta = await fetch(caminho, {
+      method: metodo,
+      headers: {
+        ...(corpo ? { 'Content-Type': 'application/json' } : {}),
+        ...(sessao.ler() ? { Authorization: `Bearer ${sessao.ler()}` } : {}),
+      },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+    return await resposta.json();
+  } catch (erro) {
+    return { ok: false, erro: 'Sem conexão com o servidor.' };
   }
-  return id;
 }
 
 // Preferencias do jogador, guardadas no proprio navegador.
@@ -32,10 +56,10 @@ const preferencias = {
   definirHolo: (ligado) => localStorage.setItem('barbestial:holo', ligado ? 'sim' : 'nao'),
 };
 
-const meuNome = {
-  ler: () => localStorage.getItem('barbestial:nome') || '',
-  salvar: (nome) => localStorage.setItem('barbestial:nome', nome),
-};
+// A conta de quem esta jogando agora. Preenchida por conta.js depois do login e
+// zerada no logout. O `id` daqui e o mesmo id que o servidor usa como jogador -
+// e por isso que a partida cai na conta certa sem ninguem precisar combinar nada.
+let CONTA = null;
 
 // Catalogo das cartas, buscado do servidor para nao duplicar cards.js aqui.
 let CATALOGO = {};

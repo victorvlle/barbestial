@@ -1,10 +1,11 @@
 // Espectador, relógio do turno e contador do baralho, no navegador.
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 const raiz = path.join(__dirname, '..');
 const PORTA = 3986, url = `http://localhost:${PORTA}`;
-const s = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -22,9 +23,9 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   for (const p of [ana, bruno, zeca]) await p.goto(url);
   await espera(600);
 
-  await ana.fill('#nome', 'Ana'); await ana.click('#btn-criar'); await espera(500);
+  await entrarNoJogo(ana, 'Ana'); await ana.click('#btn-criar'); await espera(500);
   const cod = (await ana.textContent('#codigo-sala')).trim();
-  await bruno.fill('#nome', 'Bruno'); await bruno.fill('#codigo', cod);
+  await entrarNoJogo(bruno, 'Bruno'); await bruno.fill('#codigo', cod);
   await bruno.click('#btn-entrar'); await espera(400);
   await ana.click('#btn-comecar'); await espera(900);
 
@@ -40,7 +41,7 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(/8 cartas/.test(baralho), `mostra quanto falta comprar: "${baralho.trim()}"`);
 
   // Zeca chega com a partida rolando: vira espectador
-  await zeca.fill('#nome', 'Zeca'); await zeca.fill('#codigo', cod);
+  await entrarNoJogo(zeca, 'Zeca'); await zeca.fill('#codigo', cod);
   await zeca.click('#btn-entrar'); await espera(800);
 
   check(await zeca.locator('#tela-jogo').isVisible(), 'quem chega tarde cai direto na mesa');

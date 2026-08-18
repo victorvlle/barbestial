@@ -1,10 +1,11 @@
 // Teste visual das melhorias: prévia, botão "i", instruções, log colorido.
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 const raiz = path.join(__dirname, '..');
 const PORTA = 3994, url = `http://localhost:${PORTA}`;
-const s = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 const espera = ms => new Promise(r => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -25,6 +26,9 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   }
   await ana.goto(url); await bruno.goto(url); await espera(600);
 
+  // O menu principal so existe depois do login: a tela de conta cobre tudo.
+  await entrarNoJogo(ana, 'Ana');
+
   // menu principal
   check(await ana.locator('#opt-previa').isVisible(), 'a opção de prévia aparece no menu principal');
   check(await ana.locator('#btn-instrucoes').isVisible(), 'o botão de instruções aparece no menu principal');
@@ -36,9 +40,9 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   check(!(await ana.locator('#modal').isVisible()), 'Esc fecha as instruções');
 
   // partida
-  await ana.fill('#nome', 'Ana'); await ana.click('#btn-criar'); await espera(500);
+  await ana.click('#btn-criar'); await espera(500);
   const codigo = (await ana.textContent('#codigo-sala')).trim();
-  await bruno.fill('#nome', 'Bruno'); await bruno.fill('#codigo', codigo);
+  await entrarNoJogo(bruno, 'Bruno'); await bruno.fill('#codigo', codigo);
   await bruno.click('#btn-entrar'); await espera(400);
   await ana.click('#btn-comecar'); await espera(700);
 

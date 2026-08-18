@@ -5,11 +5,42 @@ services:
   - type: web
     name: barbestial
     runtime: node
-    plan: free
+    plan: starter # o plano free nao permite disco, e sem disco o ranking se perde
     region: virginia # o mais perto do Brasil entre os disponiveis
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /saude
+
+    # O BANCO PRECISA DE UM LUGAR QUE SOBREVIVA A REINICIOS.
+    # O disco abaixo e montado em /var/data e continua la depois de cada deploy.
+    # Sem ele, o arquivo do SQLite vive no sistema de arquivos temporario do
+    # container: funciona enquanto o servidor esta de pe e some no proximo
+    # deploy, levando junto as contas e o ranking.
+    disk:
+      name: dados
+      mountPath: /var/data
+      sizeGB: 1
+
     envVars:
       - key: NODE_VERSION
         value: "22"
+
+      # Onde o SQLite guarda tudo. Tem que apontar para dentro do disco acima.
+      - key: BANCO_CAMINHO
+        value: /var/data/barbestial.db
+
+      # Chave que assina os craches de sessao. generateValue faz o Render
+      # sortear um valor forte e guardar - ele nunca aparece no repositorio.
+      # Trocar essa chave desloga todo mundo (e so isso).
+      - key: SESSAO_SEGREDO
+        generateValue: true
+
+      # Fuso usado para decidir quando a semana vira. -180 = horario de Brasilia.
+      - key: FUSO_MINUTOS
+        value: "-180"
+
+      # Login com Google: preencha no painel do Render (Environment), nunca aqui.
+      # Sem essa variavel o botao do Google simplesmente nao aparece e o jogo
+      # continua funcionando com as contas de apelido e senha.
+      - key: GOOGLE_CLIENT_ID
+        sync: false

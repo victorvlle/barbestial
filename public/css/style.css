@@ -1018,3 +1018,108 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   #palco { display: none; }
 }
+
+/* ===========================================================================
+   CONTAS E RANKING
+   =========================================================================== */
+
+/* ------------------------------------------------------------- tela de login
+   Cobre a tela inteira em vez de ser mais uma ".tela": enquanto ela estiver
+   aberta nao existe jogo nenhum atras, e assim nenhum clique escapa para uma
+   tela que a pessoa ainda nao deveria estar usando. */
+.login {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 1rem;
+  background:
+    radial-gradient(900px 380px at 50% -120px, rgba(255, 159, 67, .16), transparent 70%),
+    radial-gradient(1200px 700px at 50% 0%, #1c2433, var(--noite));
+  overflow-y: auto;
+}
+.painel--login { width: min(380px, 100%); }
+.login-titulo {
+  font-size: 1.15rem; text-transform: none; letter-spacing: 0;
+  color: #ffe9c2; justify-content: center; margin-bottom: .3rem;
+}
+.painel--login .dica { display: block; text-align: center; margin-bottom: 1.2rem; }
+.painel--login label { margin-top: .8rem; }
+.painel--login .secundario { margin-top: .5rem; }
+
+/* O botao do Google e desenhado pela biblioteca dele; so centralizamos. */
+.bloco-google { display: grid; justify-items: center; }
+#botao-google { min-height: 44px; }
+
+/* "Jogando como Victor [sair]" */
+.quem {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  margin: 0 0 1.1rem; padding-bottom: .9rem;
+  border-bottom: 1px solid var(--borda);
+  font-size: .85rem; color: var(--suave);
+}
+.quem strong { color: var(--texto); }
+.quem .fantasma {
+  margin-left: auto; padding: .25rem .6rem; font-size: .75rem;
+  color: var(--suave); border-color: var(--borda); background: transparent;
+}
+.quem .fantasma:hover:not(:disabled) { color: var(--vermelho); border-color: rgba(224,82,99,.5); filter: none; }
+
+/* --------------------------------------------------------------- o ranking
+   O menu vira tres colunas: espaco vazio a esquerda, painel no meio, ranking a
+   direita. O painel continua exatamente no centro da tela - o ranking nao
+   empurra nada, so ocupa um espaco que ja estava sobrando. */
+#tela-entrada {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center; justify-items: center;
+  gap: 1rem;
+}
+#tela-entrada .painel { grid-column: 2; }
+
+.ranking {
+  grid-column: 3; justify-self: start;
+  width: min(300px, 100%); max-height: min(70vh, 520px);
+  display: flex; flex-direction: column;
+  padding: 1rem 1.1rem; border-radius: 16px;
+  background: linear-gradient(180deg, #241d10, #191f2b);
+  border: 1px solid rgba(242, 177, 52, .35);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, .55);
+}
+.ranking h2 { color: var(--neon); margin-bottom: .15rem; }
+/* Sem 'capitalize': ele deixaria "17 a 23 de agosto" virar "17 A 23 De Agosto". */
+.ranking-periodo { margin: 0 0 .7rem; font-size: .72rem; color: var(--suave); }
+
+/* Rolagem so na lista: o titulo e a regra ficam parados, e um ranking de
+   trinta pessoas nao estica o painel para fora da tela. */
+.ranking-lista {
+  list-style: none; margin: 0; padding: 0 .2rem 0 0;
+  display: grid; gap: .3rem; overflow-y: auto; min-height: 0; flex: 1;
+}
+.ranking-linha {
+  display: grid; grid-template-columns: 1.9rem 1fr auto;
+  align-items: center; gap: .5rem;
+  padding: .42rem .55rem; border-radius: 9px;
+  background: #12161f; border: 1px solid var(--borda);
+  font-size: .85rem;
+}
+/* A propria linha em destaque: achar-se na lista e a primeira coisa que
+   qualquer pessoa faz ao olhar um ranking. */
+.ranking-linha--eu {
+  border-color: var(--neon);
+  background: #241c0f;
+  box-shadow: 0 0 0 1px rgba(242,177,52,.25);
+}
+.ranking-posicao { text-align: center; font-weight: 700; color: var(--suave); font-size: .82rem; }
+.ranking-linha:nth-child(-n+3) .ranking-posicao { font-size: 1rem; }
+.ranking-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-pontos { font-weight: 800; color: var(--neon); font-size: .8rem; white-space: nowrap; }
+.ranking-vazio { color: var(--suave); font-size: .8rem; line-height: 1.5; padding: .5rem .2rem; }
+.ranking-regra {
+  margin: .8rem 0 0; padding-top: .7rem; border-top: 1px solid var(--borda);
+  font-size: .68rem; line-height: 1.45; color: var(--suave);
+}
+
+/* Telas estreitas: o ranking desce para baixo do painel em vez de espremer os
+   dois lado a lado. */
+@media (max-width: 900px) {
+  #tela-entrada { grid-template-columns: 1fr; }
+  #tela-entrada .painel, .ranking { grid-column: 1; justify-self: center; }
+  .ranking { width: min(420px, 100%); max-height: none; }
+}

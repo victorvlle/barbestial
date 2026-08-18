@@ -3,11 +3,12 @@
 // carta era reaproveitado pelo uid, e o uid nao mudava de uma partida pra outra.
 
 const { chromium } = require('playwright');
+const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
 const raiz = path.join(__dirname, '..');
 const PORTA = 3988, url = `http://localhost:${PORTA}`;
-const s = spawn('node', ['server/index.js'], { cwd: raiz, env: { ...process.env, PORT: PORTA } });
+const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -38,9 +39,9 @@ const corDaFicha = (p, nome) =>
   await ana.goto(url); await bruno.goto(url); await espera(600);
 
   // ---- PARTIDA 1: Ana cria, então Ana é vermelha e Bruno azul
-  await ana.fill('#nome', 'Ana'); await ana.click('#btn-criar'); await espera(500);
+  await entrarNoJogo(ana, 'Ana'); await ana.click('#btn-criar'); await espera(500);
   const cod1 = (await ana.textContent('#codigo-sala')).trim();
-  await bruno.fill('#nome', 'Bruno'); await bruno.fill('#codigo', cod1);
+  await entrarNoJogo(bruno, 'Bruno'); await bruno.fill('#codigo', cod1);
   await bruno.click('#btn-entrar'); await espera(400);
   await ana.click('#btn-comecar'); await espera(900);
 

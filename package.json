@@ -11,7 +11,7 @@
     "dev": "node --watch server/index.js",
     "test": "node --test",
     "test:e2e": "node tests/e2e.js && node tests/relogio.js",
-    "test:ui": "node tests/navegador.js && node tests/melhorias.js && node tests/cores.js && node tests/espectador.js && node tests/artes.js && node tests/interface.js && node tests/hologramas.js"
+    "test:ui": "node tests/navegador.js && node tests/melhorias.js && node tests/cores.js && node tests/espectador.js && node tests/artes.js && node tests/interface.js && node tests/hologramas.js && node tests/ranking.js"
   },
   "keywords": [
     "jogo",
@@ -21,7 +21,9 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "express": "^4.19.2",
+    "google-auth-library": "^11.0.2",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
