@@ -11,10 +11,15 @@ configurar nada. As variáveis existem para produção.
 | `BANCO_CAMINHO` | Onde fica o arquivo do SQLite | `data/barbestial.db` |
 | `SESSAO_SEGREDO` | Chave que assina os crachás de sessão | sorteada a cada boot |
 | `FUSO_MINUTOS` | Fuso usado para decidir quando a semana vira | `-180` (Brasília) |
-| `GOOGLE_CLIENT_ID` | Liga o botão "Entrar com o Google" | vazio (botão não aparece) |
 | `LIMITE_TURNO_MS` | Tempo de cada turno | `35000` |
+| `SMTP_HOST` | Servidor de e-mail (envio) | vazio (os e-mails saem no log) |
+| `SMTP_PORTA` | Porta do servidor de e-mail | `587` |
+| `SMTP_USUARIO` | Usuário do servidor de e-mail | vazio |
+| `SMTP_SENHA` | Senha do servidor de e-mail | vazio |
+| `EMAIL_REMETENTE` | Quem assina os e-mails | `Bar Bestial <nao-responda@barbestial.local>` |
+| `URL_PUBLICA` | Endereço usado nos links dos e-mails | `RENDER_EXTERNAL_URL`, ou `localhost` |
 
-Duas delas merecem atenção em produção:
+Três delas merecem atenção em produção:
 
 **`BANCO_CAMINHO`** precisa apontar para um lugar que sobreviva a reinícios. No
 Render isso significa um disco montado (ver `render.yaml`). Sem disco, o arquivo
@@ -27,55 +32,115 @@ nova a cada boot e todo mundo é deslogado a cada deploy. No Render, o
 `generateValue: true` do `render.yaml` resolve isso — o Render sorteia uma vez e
 guarda.
 
-## Ligando o login com o Google — OBRIGATÓRIO
+**`SMTP_*`** decide se o e-mail sai de verdade. Sem essas variáveis nada quebra:
+o servidor imprime o e-mail inteiro — com o link — no próprio log. Dá para
+desenvolver e até socorrer alguém em produção lendo o log. Mas ninguém consegue
+confirmar a conta sozinho, e sem confirmar a pontuação não entra no ranking.
 
-**Sem `GOOGLE_CLIENT_ID` ninguém consegue se cadastrar.** Toda conta precisa de
-apelido + senha + conta do Google conectada, porque o Google é a única prova
-aceita para recuperar a senha. Quem já tem conta ainda consegue entrar por
-apelido e senha, mas cadastros novos ficam bloqueados.
+## Ligando o envio de e-mail
 
-Para ligar o botão do Google:
+Qualquer provedor que fale SMTP serve — Gmail com senha de app, Brevo, Resend,
+Mailgun, o que você preferir. Nenhum código muda; é só preencher no painel do
+Render, em **Environment**:
 
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/) e crie um
-   projeto (ou use um que já tenha).
-2. Em **APIs e serviços → Tela de permissão OAuth**, configure a tela de consentimento.
-   Tipo de usuário "Externo" serve; preencha nome do app e e-mail de contato.
-3. Em **APIs e serviços → Credenciais → Criar credenciais → ID do cliente OAuth**,
-   escolha **Aplicativo da Web**.
-4. Em **Origens JavaScript autorizadas**, adicione os endereços de onde o jogo é
-   servido — um por linha:
-   - `http://localhost:3001` (para testar na sua máquina)
-   - `https://SEU-APP.onrender.com` (a URL de produção)
-5. Copie o **ID do cliente** (termina em `.apps.googleusercontent.com`) e
-   coloque em `GOOGLE_CLIENT_ID`, no painel do Render em **Environment**.
+```
+SMTP_HOST=smtp.seuprovedor.com
+SMTP_PORTA=587
+SMTP_USUARIO=voce@seudominio.com
+SMTP_SENHA=<a senha ou chave do provedor>
+EMAIL_REMETENTE=Bar Bestial <voce@seudominio.com>
+URL_PUBLICA=https://barbestial.onrender.com
+```
 
-Não existe "client secret" neste fluxo, e não há nada para esconder: o ID do
-cliente é público por natureza — o Google exige que ele apareça na página. O que
-garante a segurança é a **assinatura** do crachá que o Google devolve, conferida
-no servidor com as chaves públicas do próprio Google
-(`server/auth/google.js`). Nenhuma senha do Google passa por este servidor.
+`URL_PUBLICA` é o endereço que vai dentro dos links. No Render, se você não
+definir, o próprio `RENDER_EXTERNAL_URL` é usado.
+
+**A senha do SMTP fica só no servidor.** Nada disso aparece no JavaScript do
+navegador: a única coisa que a página pergunta é `/api/conta/config`, que
+devolve apenas `email: true|false` (se o envio está ligado) e o tamanho mínimo
+da senha. Um teste confere essa lista campo a campo — qualquer coisa nova que
+alguém coloque lá derruba a suíte.
+
+**Se o envio falhar, o cadastro continua valendo.** O erro é registrado no log e
+a pessoa entra no jogo assim mesmo; ela usa o botão "Reenviar e-mail" depois.
+Perder um e-mail não pode custar um cadastro.
 
 ## Como funciona a conta
 
-Uma conta tem **três** identificações, e nenhuma é opcional:
+Uma conta tem três coisas, todas obrigatórias: **e-mail, apelido e senha**. O
+apelido é o que aparece no ranking; o e-mail ninguém vê.
 
-| | para que serve |
+| momento | o que acontece |
 |---|---|
-| apelido | o login do dia a dia e o nome no ranking |
-| senha | guardada como `scrypt(senha, sal)`; a senha em si não existe no banco |
-| Google | a única prova aceita para recuperar a senha |
+| cadastro | a conta nasce **já logada** e um link de confirmação é enviado |
+| antes de confirmar | joga tudo normalmente, mas **fica fora do ranking** |
+| clicou no link | a pontuação que já era dela passa a aparecer — nada se perde |
+| esqueceu a senha | pede pelo **e-mail** e recebe um link de 1 hora |
 
-**Entrar** no dia a dia: apelido+senha **ou** o botão do Google, tanto faz.
+A escolha de deixar jogar antes de confirmar é de propósito: a primeira partida
+é o momento em que a pessoa decide se volta. Travar o jogo ali custaria mais do
+que ganharia. O ranking, sim, exige confirmação — e isso protege a tabela de
+quem tentaria farmar pontos com contas descartáveis.
 
-**Recuperar a senha**: só pelo Google. A rota `/api/conta/recuperar` **não
-recebe apelido** — a conta é encontrada pelo Google em que a pessoa acabou de
-entrar. Saber o apelido de alguém não abre porta nenhuma.
+### Recuperar a senha
+
+**Só pelo e-mail.** A rota `/api/conta/esqueci` não recebe apelido, e isso é a
+trava mais importante do sistema: o apelido está no ranking, à vista de todo
+mundo. Se ele recuperasse senha, a lista de campeões viraria uma lista de alvos.
+
+A resposta é **sempre a mesma**, exista a conta ou não — senão a rota viraria um
+consultor gratuito de "este e-mail tem conta aqui?".
+
+### Os links do e-mail
+
+Guardamos apenas o **hash** de cada token (`tokens.hash`), nunca o token em si:
+quem lesse o banco não conseguiria usar um link. Além disso:
+
+- servem **uma vez só**;
+- valem 48 horas (confirmação) ou 1 hora (recuperação);
+- pedir um novo **invalida o anterior** do mesmo tipo;
+- o link de confirmar e-mail **não** serve para trocar senha, e vice-versa;
+- apagar uma conta apaga os tokens dela junto (`ON DELETE CASCADE`).
+
+E um limite de **um e-mail por minuto por endereço**, para o "esqueci a senha"
+não virar um jeito de bombardear a caixa de entrada de outra pessoa.
+
+## Migrações
+
+O banco se atualiza sozinho ao subir o servidor, usando `PRAGMA user_version`.
+Cada degrau roda uma vez só; reiniciar não repete nada.
+
+| degrau | o que faz |
+|---|---|
+| 0 → 1 | cria `usuarios`, `partidas`, `resultados` e os índices |
+| 1 → 2 | senha e login externo viram opcionais, e entra a coluna `email_chave` |
+| 2 → 3 | o login externo sai de cena: entram `email`, `email_verificado_em` e a tabela `tokens` |
+
+**Nenhuma migração apaga conta.** Quando uma coluna precisa mudar de regra (o
+SQLite não sabe `ALTER COLUMN`), a tabela é reconstruída copiando as linhas
+antigas. Partidas e ranking seguem intactos. Há 8 testes em
+`tests/migracao.test.js` que montam bancos nos formatos antigos e conferem que
+tudo sobrevive. No degrau 2 → 3, quem tinha e-mail vindo do login externo já
+nasce com ele **confirmado** — aquele e-mail acabara de ser verificado, não faz
+sentido pedir de novo.
+
+## CORS e CSRF
+
+Nenhum dos dois precisa de configuração aqui, e isso é uma escolha:
+
+- **CORS**: o front é servido pelo mesmo servidor que responde a API. Não há
+  requisição entre origens. Não habilitamos CORS de propósito — abrir a API para
+  outras origens sem necessidade só aumentaria a superfície de ataque.
+- **CSRF**: o crachá de sessão viaja no cabeçalho `Authorization`, nunca em
+  cookie. Um POST forjado de outro site chega sem crachá e é recusado como
+  qualquer pedido anônimo.
 
 ## Onde ficam os dados
 
-Um arquivo SQLite, com quatro tabelas (`server/dados/banco.js`):
+Um arquivo SQLite (`server/dados/banco.js`):
 
-- `usuarios` — uma linha por conta (apelido, senha em hash, Google)
+- `usuarios` — uma linha por conta (e-mail, apelido, senha em hash)
+- `tokens` — os links de e-mail em aberto, guardados como hash
 - `partidas` — uma linha por partida concluída
 - `resultados` — uma linha por jogador em cada partida
 - e os índices por semana, que fazem o ranking ser instantâneo
@@ -107,13 +172,13 @@ O painel nunca devolve `senha_hash` nem `senha_sal` — nem para o administrador
 
 Alternativa sem expor nada na internet: `npm run contas`, pelo Shell do Render.
 
-## Modo de teste do Google
+## Testando o fluxo de e-mail
 
-Os testes automatizados precisam percorrer o cadastro, e não há como gerar um
-crachá de verdade do Google sem navegador e conta real. `GOOGLE_MODO_TESTE=1`
-faz o servidor aceitar crachás falsos no formato `teste:<id>:<email>`.
+Sem SMTP configurado, o servidor imprime cada e-mail no console — com o link
+inteiro. É assim que os testes automatizados percorrem o caminho completo
+(cadastro → link → conta confirmada → ranking) sem nenhum servidor de e-mail e,
+principalmente, **sem nenhuma rota secreta de teste no servidor**: o que os
+testes exercitam é exatamente o código de produção.
 
-**Isso não liga em produção.** A checagem em `server/auth/google.js` exige que
-`NODE_ENV` seja diferente de `production` — e o `render.yaml` define
-`NODE_ENV=production` justamente para fechar essa porta. Se alguém definir a
-variável em produção, o servidor a ignora e avisa no log.
+Para experimentar na sua máquina: rode `npm start`, crie uma conta e olhe o
+terminal — o link está lá.

@@ -15,12 +15,28 @@ const { criarEstado, jogarCarta, calcularResultado } = require('../server/game/g
 
 let contador = 0;
 
-// Uma conta completa: apelido + senha + Google. Os tres sao obrigatorios.
-const google = (nome) => ({ sub: `google-${nome}`, email: `${nome}@exemplo.test` });
+const tokens = require('../server/dados/tokens');
+
+// Uma conta completa: e-mail + apelido + senha.
 const conta = (nome, senha = 'senha1234') => {
   const apelido = `${nome}${++contador}`;
-  return usuarios.criarConta({ apelido, senha, google: google(apelido) });
+  return usuarios.criarConta({
+    email: `${apelido.toLowerCase()}@exemplo.test`,
+    apelido,
+    senha,
+  });
 };
+
+// Uma conta que já confirmou o e-mail - é o que o ranking exige para mostrar
+// alguém. Os testes de ranking usam esta.
+const contaConfirmada = (nome, senha = 'senha1234') => confirmar(conta(nome, senha));
+
+// Confirma o e-mail de uma conta pelo caminho de verdade: cria o token e
+// consome, exatamente como o clique no link faria.
+function confirmar(usuario) {
+  const token = tokens.criar(usuario.id, 'verificar');
+  return usuarios.marcarEmailVerificado(tokens.consumir(token, 'verificar'));
+}
 
 // Roda a funcao e devolve o erro que ela lancou (ou null).
 function oQueDeuErrado(acao) {
@@ -34,71 +50,62 @@ function oQueDeuErrado(acao) {
 
 // ============================================================ 1. cadastro
 
-test('cria uma conta com apelido, senha e Google, e entra com ela', () => {
+test('cria uma conta com e-mail, apelido e senha, e entra com ela', () => {
   const criada = usuarios.criarConta({
+    email: 'victor@exemplo.test',
     apelido: 'Victor',
     senha: 'batatinha',
-    google: google('victor'),
   });
   assert.strictEqual(criada.apelido, 'Victor');
+  assert.strictEqual(criada.email, 'victor@exemplo.test');
   assert.ok(criada.id, 'a conta precisa de um identificador único');
-  assert.ok(criada.google_sub, 'e do Google conectado');
+  assert.strictEqual(criada.email_verificado_em, null, 'nasce sem confirmar');
 
-  const entrou = usuarios.entrarComSenha('Victor', 'batatinha');
-  assert.strictEqual(entrou.id, criada.id, 'entrar tem que achar a MESMA conta');
+  assert.strictEqual(usuarios.entrarComSenha('Victor', 'batatinha').id, criada.id);
 });
 
-test('sem Google não existe cadastro', () => {
+test('dá para entrar pelo apelido OU pelo e-mail', () => {
+  const criada = conta('Dois');
+  assert.strictEqual(usuarios.entrarComSenha(criada.apelido, 'senha1234').id, criada.id);
+  assert.strictEqual(usuarios.entrarComSenha(criada.email, 'senha1234').id, criada.id);
+});
+
+test('sem e-mail não existe cadastro', () => {
   const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'SemGoogle', senha: 'senha1234', google: null })
+    usuarios.criarConta({ email: '', apelido: 'SemEmail', senha: 'senha1234' })
   );
-  assert.match(erro.message, /Google/);
-  assert.strictEqual(usuarios.porApelido('SemGoogle'), null, 'e a conta não foi criada');
+  assert.match(erro.message, /e-mail/i);
+  assert.strictEqual(usuarios.porApelido('SemEmail'), null, 'e a conta não foi criada');
 });
 
-test('sem senha não existe cadastro', () => {
+test('e-mail malformado é recusado', () => {
+  for (const ruim of ['abc', 'a@b', 'sem arroba.com', '@exemplo.test', 'a b@c.com']) {
+    const erro = oQueDeuErrado(() =>
+      usuarios.criarConta({ email: ruim, apelido: `Ruim${++contador}`, senha: 'senha1234' })
+    );
+    assert.ok(erro, `deveria recusar "${ruim}"`);
+  }
+});
+
+test('e-mail repetido é recusado, sem diferenciar maiúsculas', () => {
+  usuarios.criarConta({ email: 'igual@exemplo.test', apelido: 'PrimeiroAqui', senha: 'senha1234' });
   const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'SemSenha', senha: '', google: google('semsenha') })
+    usuarios.criarConta({ email: 'IGUAL@Exemplo.Test', apelido: 'SegundoAqui', senha: 'senha1234' })
   );
-  assert.match(erro.message, /senha/i);
-  assert.strictEqual(usuarios.porApelido('SemSenha'), null);
-});
-
-test('sem apelido não existe cadastro', () => {
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'ab', senha: 'senha1234', google: google('ab') })
-  );
-  assert.match(erro.message, /apelido/i);
-});
-
-test('o apelido não diferencia maiúsculas, mas o nome exibido é preservado', () => {
-  const criada = usuarios.criarConta({ apelido: 'Jorge', senha: 'senha1234', google: google('jorge') });
-  assert.strictEqual(usuarios.entrarComSenha('JORGE', 'senha1234').id, criada.id);
-  assert.strictEqual(criada.apelido, 'Jorge');
+  assert.match(erro.message, /Já existe uma conta com esse e-mail/);
 });
 
 test('apelido repetido é recusado', () => {
-  usuarios.criarConta({ apelido: 'Repetido', senha: 'senha1234', google: google('r1') });
+  usuarios.criarConta({ email: 'r1@exemplo.test', apelido: 'Repetido', senha: 'senha1234' });
   const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'repetido', senha: 'outra1234', google: google('r2') })
+    usuarios.criarConta({ email: 'r2@exemplo.test', apelido: 'repetido', senha: 'outra1234' })
   );
   assert.match(erro.message, /já está em uso/);
 });
 
-test('a mesma conta do Google não pode virar dois apelidos', () => {
-  const mesmoGoogle = google('unico');
-  usuarios.criarConta({ apelido: 'PrimeiroNome', senha: 'senha1234', google: mesmoGoogle });
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'SegundoNome', senha: 'senha1234', google: mesmoGoogle })
-  );
-  assert.match(erro.message, /já está ligada/);
-});
-
-test('apelido com símbolos estranhos é recusado', () => {
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ apelido: 'a b<c>', senha: 'senha1234', google: google('xx') })
-  );
-  assert.match(erro.message, /letras/i);
+test('apelido curto ou com símbolos estranhos é recusado', () => {
+  assert.ok(oQueDeuErrado(() => usuarios.criarConta({ email: 'a@b.com', apelido: 'ab', senha: 'senha1234' })));
+  assert.ok(oQueDeuErrado(() => usuarios.criarConta({ email: 'a@b.com', apelido: 'a b<c>', senha: 'senha1234' })));
 });
 
 // ============================================================ 2. senhas
@@ -110,8 +117,7 @@ test('a senha nunca é guardada em texto puro', () => {
 
   // Duas contas com a MESMA senha têm hashes diferentes - é para isso que
   // serve o sal: uma tabela de senhas prontas não serve para nada.
-  const outra = conta('Segredo', 'minhasenha');
-  assert.notStrictEqual(criada.senha_hash, outra.senha_hash);
+  assert.notStrictEqual(criada.senha_hash, conta('Segredo', 'minhasenha').senha_hash);
 });
 
 test('senha errada não entra, e o erro não revela se a conta existe', () => {
@@ -127,71 +133,141 @@ test('senha errada não entra, e o erro não revela se a conta existe', () => {
   );
 });
 
-test('o que vai para o cliente não leva hash, sal nem o sub do Google', () => {
-  const criada = conta('Publico');
-  const enviado = usuarios.paraOCliente(criada);
-  assert.deepStrictEqual(Object.keys(enviado).sort(), ['id', 'nome', 'temGoogle']);
-  assert.ok(!JSON.stringify(enviado).includes('google-'), 'o sub do Google não sai daqui');
+test('o que vai para o cliente não leva hash nem sal', () => {
+  const enviado = usuarios.paraOCliente(conta('Publico'));
+  assert.deepStrictEqual(Object.keys(enviado).sort(), ['email', 'id', 'nome', 'verificado']);
+  assert.ok(!JSON.stringify(enviado).includes('hash'));
 });
 
-// ============================================================ 3. entrar pelo Google
+// ============================================================ 3. verificação
 
-test('quem já tem conta entra com um clique no Google', () => {
-  const criada = usuarios.criarConta({ apelido: 'PeloGoogle', senha: 'senha1234', google: google('pg') });
-  const entrou = usuarios.entrarComGoogle(google('pg'));
-  assert.strictEqual(entrou.id, criada.id);
+test('a conta nasce sem confirmar e o link confirma', () => {
+  const criada = conta('Confirmando');
+  assert.strictEqual(usuarios.verificado(criada), false);
+
+  const depois = confirmar(criada);
+  assert.ok(depois.email_verificado_em, 'ficou com a data da confirmação');
+  assert.strictEqual(usuarios.verificado(depois), true);
 });
 
-test('entrar pelo Google NÃO cria conta sozinho', () => {
-  const erro = oQueDeuErrado(() => usuarios.entrarComGoogle(google('desconhecido')));
-  assert.match(erro.message, /Crie sua conta/);
-  assert.strictEqual(usuarios.porGoogle('google-desconhecido'), null, 'nada foi criado');
+test('confirmar duas vezes não quebra nem muda a data', () => {
+  const criada = conta('Duas');
+  const primeira = confirmar(criada);
+  const segunda = usuarios.marcarEmailVerificado(criada.id);
+  assert.strictEqual(segunda.email_verificado_em, primeira.email_verificado_em);
 });
 
-// ============================================================ 4. recuperação
+test('quem digitou o e-mail errado pode corrigir, e volta a não confirmado', () => {
+  const criada = conta('Errou');
+  usuarios.trocarEmail(criada.id, 'certo@exemplo.test');
+  const depois = usuarios.porId(criada.id);
+  assert.strictEqual(depois.email, 'certo@exemplo.test');
+  assert.strictEqual(depois.email_verificado_em, null);
 
-test('quem tem o Google da conta define uma senha nova e entra', () => {
-  const criada = usuarios.criarConta({ apelido: 'Esquecido', senha: 'velha1234', google: google('esq') });
+  // E não dá para roubar o e-mail de outra conta.
+  const outra = conta('Outra');
+  const erro = oQueDeuErrado(() => usuarios.trocarEmail(criada.id, outra.email));
+  assert.match(erro.message, /Já existe uma conta/);
+});
 
-  const depois = usuarios.trocarSenhaComGoogle(google('esq'), 'nova12345');
-  assert.strictEqual(depois.id, criada.id);
-  assert.ok(depois.senha_trocada_em, 'a troca fica registrada');
+// ============================================================ 4. tokens
 
-  assert.ok(usuarios.entrarComSenha('Esquecido', 'nova12345'), 'a senha nova funciona');
+test('o token é de uso único', () => {
+  const criada = conta('UsoUnico');
+  const token = tokens.criar(criada.id, 'recuperar');
+
+  assert.strictEqual(tokens.consumir(token, 'recuperar'), criada.id);
+  const erro = oQueDeuErrado(() => tokens.consumir(token, 'recuperar'));
+  assert.match(erro.message, /já foi usado/);
+});
+
+test('o token expira', () => {
+  const criada = conta('Expirado');
+  const token = tokens.criar(criada.id, 'recuperar');
+  const depoisDoPrazo = Date.now() + tokens.VALIDADE.recuperar + 1000;
+
+  const erro = oQueDeuErrado(() => tokens.consumir(token, 'recuperar', depoisDoPrazo));
+  assert.match(erro.message, /expirou/);
+});
+
+test('pedir um link novo invalida o anterior', () => {
+  // Senão cada clique em "esqueci a senha" deixaria mais uma chave válida
+  // circulando pela caixa de entrada.
+  const criada = conta('Novo');
+  const antigo = tokens.criar(criada.id, 'recuperar');
+  const recente = tokens.criar(criada.id, 'recuperar');
+
+  assert.ok(oQueDeuErrado(() => tokens.consumir(antigo, 'recuperar')), 'o antigo morreu');
+  assert.strictEqual(tokens.consumir(recente, 'recuperar'), criada.id);
+});
+
+test('token de um tipo não serve para o outro', () => {
+  // Um link de confirmação de e-mail não pode virar um link de trocar senha.
+  const criada = conta('Tipos');
+  const verificacao = tokens.criar(criada.id, 'verificar');
+  assert.ok(oQueDeuErrado(() => tokens.consumir(verificacao, 'recuperar')));
+});
+
+test('token inventado não vale', () => {
+  assert.ok(oQueDeuErrado(() => tokens.consumir('inventei-esse-aqui', 'recuperar')));
+  assert.ok(oQueDeuErrado(() => tokens.consumir('', 'recuperar')));
+  assert.ok(oQueDeuErrado(() => tokens.consumir(null, 'verificar')));
+});
+
+test('o banco guarda o HASH do token, nunca o token', () => {
+  // Se o banco vazar, os links que estiverem lá dentro não abrem nada.
+  const criada = conta('Hashado');
+  const token = tokens.criar(criada.id, 'recuperar');
+  const linhas = require('../server/dados/banco').abrir().prepare('SELECT * FROM tokens').all();
+  assert.ok(linhas.length > 0);
+  assert.ok(!linhas.some((l) => l.hash === token), 'o valor original não pode estar no banco');
+});
+
+// ============================================================ 5. recuperação
+
+test('o link do e-mail define a senha nova e já confirma o e-mail', () => {
+  const criada = conta('Esquecido', 'velha1234');
+  assert.strictEqual(usuarios.verificado(criada), false);
+
+  const token = tokens.criar(criada.id, 'recuperar');
+  const depois = usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), 'nova12345');
+
+  assert.ok(usuarios.entrarComSenha(criada.apelido, 'nova12345'), 'a senha nova funciona');
   assert.ok(
-    oQueDeuErrado(() => usuarios.entrarComSenha('Esquecido', 'velha1234')),
+    oQueDeuErrado(() => usuarios.entrarComSenha(criada.apelido, 'velha1234')),
     'e a antiga deixa de funcionar'
   );
+  // Quem abriu o link provou que a caixa de entrada é dele - que é justamente
+  // o que a confirmação queria descobrir.
+  assert.ok(depois.email_verificado_em, 'o e-mail fica confirmado de brinde');
 });
 
 test('SABER O APELIDO NÃO RECUPERA NADA', () => {
-  // O ponto central do desenho: a função de recuperação não tem nem por onde
-  // receber um apelido. A conta é encontrada pelo Google, e por mais nada.
-  usuarios.criarConta({ apelido: 'Alvo', senha: 'senha1234', google: google('alvo') });
+  // O ponto central do desenho: a recuperação começa por um e-mail que só o
+  // dono recebe. Conhecer o apelido - que aparece no ranking para todo mundo -
+  // não dá nenhum passo em direção à conta.
+  const vitima = conta('Alvo', 'senha1234');
+  const atacante = conta('Atacante');
+  // O apelido real tem sufixo (Alvo1, Alvo2...) porque os testes rodam em
+  // sequência no mesmo banco.
 
-  // Um atacante que conhece o apelido "Alvo" e traz o PRÓPRIO Google:
-  const atacante = usuarios.criarConta({
-    apelido: 'Atacante',
-    senha: 'senha1234',
-    google: google('atacante'),
-  });
-  const mexeu = usuarios.trocarSenhaComGoogle(google('atacante'), 'senha-do-atacante');
+  // O atacante só consegue gerar token para a conta DELE.
+  const token = tokens.criar(atacante.id, 'recuperar');
+  const mexeu = usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), 'senha-do-atacante');
 
-  assert.strictEqual(mexeu.id, atacante.id, 'ele só consegue trocar a própria senha');
+  assert.strictEqual(mexeu.id, atacante.id, 'ele só trocou a própria senha');
   assert.ok(
-    usuarios.entrarComSenha('Alvo', 'senha1234'),
+    usuarios.entrarComSenha(vitima.apelido, 'senha1234'),
     'a senha da vítima continua valendo'
   );
 });
 
-test('Google sem conta não troca senha nenhuma', () => {
-  const erro = oQueDeuErrado(() => usuarios.trocarSenhaComGoogle(google('ninguem'), 'nova12345'));
-  assert.match(erro.message, /Crie sua conta/);
-});
-
 test('recuperação também exige senha nova válida', () => {
-  usuarios.criarConta({ apelido: 'Curta', senha: 'senha1234', google: google('curta') });
-  const erro = oQueDeuErrado(() => usuarios.trocarSenhaComGoogle(google('curta'), '123'));
+  const criada = conta('Curta');
+  const token = tokens.criar(criada.id, 'recuperar');
+  const erro = oQueDeuErrado(() =>
+    usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), '123')
+  );
   assert.match(erro.message, /pelo menos/);
 });
 
@@ -202,25 +278,27 @@ test('trocar a senha estando logado exige a senha atual', () => {
   assert.ok(usuarios.entrarComSenha(criada.apelido, 'nova12345'));
 });
 
-// ============================================================ 5. sessao
+// ============================================================ 6. sessão
 
 test('a sessão identifica o dono e sobrevive a um F5', () => {
   const criada = conta('Sessao');
-  const token = usuarios.criarSessao(criada.id);
-  assert.strictEqual(usuarios.lerSessao(token).id, criada.id);
+  assert.strictEqual(usuarios.lerSessao(usuarios.criarSessao(criada.id)).id, criada.id);
 });
 
 test('token adulterado, vencido ou inventado não vale', () => {
   const criada = conta('Cracha');
   const token = usuarios.criarSessao(criada.id);
 
-  assert.strictEqual(usuarios.lerSessao(token.replace(/.$/, '0')), null, 'assinatura mexida');
+  // Mexe no ÚLTIMO caractere da assinatura. Trocar sempre por '0' seria um teste
+  // que passa quase sempre: quando o último caractere já fosse '0', o crachá
+  // continuaria idêntico e válido. Aqui a troca muda o token com certeza.
+  const mexido = token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a');
+  assert.strictEqual(usuarios.lerSessao(mexido), null, 'assinatura mexida');
   assert.strictEqual(usuarios.lerSessao('qualquer.coisa.aqui'), null, 'token inventado');
   assert.strictEqual(usuarios.lerSessao(''), null);
   assert.strictEqual(usuarios.lerSessao(null), null);
 
-  // Trocar o id mantendo a assinatura antiga também não passa: a assinatura
-  // cobre o id, então virar a conta de outra pessoa é impossível.
+  // Trocar o id mantendo a assinatura antiga também não passa.
   const outro = conta('Outro');
   const [, expira, assinatura] = token.split('.');
   assert.strictEqual(usuarios.lerSessao(`${outro.id}.${expira}.${assinatura}`), null);
@@ -318,9 +396,9 @@ const resultadoCom = (linhas) => ({
 });
 
 test('uma partida vira pontos das pessoas certas', () => {
-  const ana = conta('Ana');
-  const bento = conta('Bento');
-  const clara = conta('Clara');
+  const ana = contaConfirmada('Ana');
+  const bento = contaConfirmada('Bento');
+  const clara = contaConfirmada('Clara');
 
   const gravado = ranking.registrarPartida({
     partidaId: 'partida-basica',
@@ -337,8 +415,8 @@ test('uma partida vira pontos das pessoas certas', () => {
 });
 
 test('a mesma partida nunca conta duas vezes', () => {
-  const ana = conta('Dupla');
-  const bento = conta('Dupla');
+  const ana = contaConfirmada('Dupla');
+  const bento = contaConfirmada('Dupla');
   const dados = {
     partidaId: 'partida-repetida',
     resultado: resultadoCom([
@@ -358,9 +436,9 @@ test('a mesma partida nunca conta duas vezes', () => {
 
 test('o ranking soma várias partidas e ordena por pontos', () => {
   const semana = ranking.chaveDaSemana();
-  const forte = conta('Forte');
-  const medio = conta('Medio');
-  const fraco = conta('Fraco');
+  const forte = contaConfirmada('Forte');
+  const medio = contaConfirmada('Medio');
+  const fraco = contaConfirmada('Fraco');
 
   for (let i = 0; i < 3; i++) {
     ranking.registrarPartida({
@@ -389,8 +467,8 @@ test('virar a semana zera o ranking mas não apaga o passado', () => {
   const chaveNova = ranking.chaveDaSemana(estaSemana);
   assert.notStrictEqual(chaveVelha, chaveNova);
 
-  const veterano = conta('Veterano');
-  const novato = conta('Novato');
+  const veterano = contaConfirmada('Veterano');
+  const novato = contaConfirmada('Novato');
 
   ranking.registrarPartida({
     partidaId: 'semana-passada',
@@ -423,8 +501,8 @@ test('partida sem identificação é recusada', () => {
 // ============================================================ 7. de ponta a ponta
 
 test('uma partida de verdade, do início ao fim, vira pontos', () => {
-  const ana = conta('PontaA');
-  const bento = conta('PontaB');
+  const ana = contaConfirmada('PontaA');
+  const bento = contaConfirmada('PontaB');
 
   // O id da conta é o id do jogador dentro do jogo - é isso que amarra a
   // partida à pessoa sem nenhuma tradução no meio.

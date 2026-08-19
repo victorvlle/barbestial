@@ -31,7 +31,7 @@ const quando = (t) => (t ? new Date(t).toLocaleString('pt-BR', { timeZone: 'Amer
 // Uma linha por conta, com o quanto cada uma jogou.
 const contas = banco
   .prepare(
-    `SELECT u.id, u.apelido AS nome, u.google_email, u.criado_em, u.visto_em,
+    `SELECT u.id, u.apelido AS nome, u.email, u.email_verificado_em, u.criado_em, u.visto_em,
             (SELECT COUNT(*) FROM resultados r WHERE r.usuario_id = u.id) AS partidas
        FROM usuarios u
       ORDER BY u.criado_em DESC`
@@ -52,7 +52,7 @@ if (contas.length === 0) {
 } else {
   for (const c of contas) {
     console.log(
-      `  ${c.nome.padEnd(18)} ${String(c.google_email || '—').padEnd(28)} ` +
+      `  ${c.nome.padEnd(18)} ${String((c.email || '—') + (c.email_verificado_em ? ' ✓' : ' ✗')).padEnd(30)} ` +
         `criada em ${quando(c.criado_em).padEnd(20)} ` +
         `último acesso ${quando(c.visto_em).padEnd(20)} ` +
         `${c.partidas} partida(s)`

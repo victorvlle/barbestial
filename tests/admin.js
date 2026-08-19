@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
-const { criarConta, ambienteDeTeste } = require('./ajuda');
+const { criarConta, ambienteDeTeste, emailDeTeste, capturarEmails } = require('./ajuda');
 const { io } = require('socket.io-client');
 
 const raiz = path.join(__dirname, '..');
@@ -19,6 +19,7 @@ const comAdmin = spawn('node', ['server/index.js'], {
   cwd: raiz,
   env: ambienteDeTeste(PORTA_COM, { ADMIN_SEGREDO: SENHA }),
 });
+const caixa = capturarEmails(comAdmin);
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const pedir = (s, ev, d = {}) => new Promise((r) => s.emit(ev, d, r));
@@ -66,6 +67,16 @@ const comSenha = (senha) =>
   // Cria duas contas e joga uma partida, para o painel ter o que mostrar.
   const a = await criarConta(comUrl, 'Victor');
   const b = await criarConta(comUrl, 'Jorge');
+  // O ranking so mostra quem confirmou o e-mail, entao os dois confirmam - pelo
+  // caminho de verdade, abrindo o link que o servidor mandou.
+  for (const nome of ['Victor', 'Jorge']) {
+    let link = null;
+    for (let i = 0; i < 60 && !link; i++) {
+      link = caixa.link(emailDeTeste(nome), 'verificar');
+      if (!link) await espera(60);
+    }
+    await fetch(link, { redirect: 'manual' });
+  }
   const s1 = io(comUrl, { auth: { token: a.token } });
   const s2 = io(comUrl, { auth: { token: b.token } });
   await Promise.all([s1, s2].map((s) => new Promise((r) => s.once('connect', r))));

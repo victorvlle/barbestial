@@ -1,23 +1,20 @@
 // Contas e sessoes.
 //
-// UMA CONTA TEM SEMPRE TRES COISAS, e nenhuma delas e opcional:
-//   apelido  - o login do dia a dia, e o nome que aparece no ranking
-//   senha    - guardada como scrypt(senha, sal); a senha em si nao existe aqui
-//   Google   - a conta do Google conectada, identificada pelo 'sub'
+// UMA CONTA TEM TRES COISAS: e-mail, apelido e senha.
+//   e-mail  - a identidade verificavel. E por ele, e SO por ele, que se
+//             recupera o acesso
+//   apelido - o nome no ranking e o login do dia a dia
+//   senha   - guardada como scrypt(senha, sal); a senha em si nao existe aqui
 //
-// POR QUE OS TRES JUNTOS: o Google e a unica prova aceita para recuperar a
-// senha. Quem sabe o apelido de alguem nao consegue nada - precisa conseguir
-// entrar na conta do Google daquela pessoa. Se o Google fosse opcional,
-// "esqueci a senha" viraria uma porta destrancada para quem conhecesse o
-// apelido, que e justamente o dado mais publico que existe no jogo.
+// O E-MAIL PRECISA SER CONFIRMADO, mas nao para jogar - para PONTUAR. Quem
+// acabou de se cadastrar entra e joga na hora; a pontuacao so entra no ranking
+// depois do clique no link. A troca e proposital: um e-mail que demora nao
+// custa um jogador, e ainda da um motivo concreto para confirmar.
 //
-// PARA ENTRAR NO DIA A DIA, qualquer um dos dois caminhos serve: apelido+senha
-// ou o botao do Google. Exigir os dois toda vez so atrapalharia quem so quer
-// jogar - a trava que importa esta na recuperacao, nao no login.
-//
-// SENHAS: nunca guardadas. Guardamos scrypt(senha, sal) - uma funcao lenta de
-// proposito, feita para tornar caro testar milhoes de senhas. Vem do proprio
-// Node (node:crypto), sem biblioteca de terceiros.
+// POR QUE SO PELO E-MAIL SE RECUPERA: se desse para recuperar sabendo o
+// apelido, o apelido - que aparece no ranking para todo mundo - viraria o
+// primeiro passo para roubar uma conta. Quem nao tem acesso a caixa de entrada
+// nao tem por onde comecar.
 //
 // SESSAO: um texto de tres partes, "usuarioId.expiraEm.assinatura", assinado
 // com HMAC-SHA256. O servidor nao guarda sessao nenhuma - ele so confere a
@@ -87,12 +84,13 @@ function lerSessao(token, agora = Date.now()) {
   return porId(usuarioId);
 }
 
-// ------------------------------------------------------------------ apelido
+// ------------------------------------------------------------ apelido e e-mail
 
 const APELIDO_MAXIMO = 16;
 const APELIDO_MINIMO = 3;
 
 const chaveDoApelido = (apelido) => String(apelido || '').trim().toLowerCase();
+const chaveDoEmail = (email) => String(email || '').trim().toLowerCase();
 
 function validarApelido(apelido) {
   const limpo = String(apelido || '').trim().slice(0, APELIDO_MAXIMO);
@@ -106,6 +104,20 @@ function validarApelido(apelido) {
   return limpo;
 }
 
+// A validacao de e-mail para de proposito no basico: "tem uma arroba, tem um
+// ponto depois dela, nao tem espaco". Regex elaborada de e-mail e famosa por
+// recusar endereco valido, e nao adianta nada - quem prova que o endereco
+// existe e funciona e o link que chega nele, nao a regex.
+function validarEmail(email) {
+  const limpo = String(email || '').trim();
+  if (!limpo) throw new ErroDeConta('Digite seu e-mail.');
+  if (limpo.length > 200) throw new ErroDeConta('E-mail longo demais.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(limpo)) {
+    throw new ErroDeConta('Esse e-mail não parece válido.');
+  }
+  return limpo;
+}
+
 // ------------------------------------------------------------------ buscas
 
 const porId = (id) => abrir().prepare('SELECT * FROM usuarios WHERE id = ?').get(id) || null;
@@ -114,31 +126,29 @@ const porApelido = (apelido) =>
   abrir().prepare('SELECT * FROM usuarios WHERE apelido_chave = ?').get(chaveDoApelido(apelido)) ||
   null;
 
-const porGoogle = (sub) =>
-  abrir().prepare('SELECT * FROM usuarios WHERE google_sub = ?').get(String(sub || '')) || null;
+const porEmail = (email) =>
+  abrir().prepare('SELECT * FROM usuarios WHERE email_chave = ?').get(chaveDoEmail(email)) || null;
+
+// Entrar aceita o apelido OU o e-mail. Sao duas coisas que a pessoa sabe de cor,
+// e obrigar a lembrar qual das duas e o login seria atrito a toa.
+const porLogin = (texto) =>
+  String(texto || '').includes('@') ? porEmail(texto) : porApelido(texto);
 
 const marcarVisto = (id) =>
   abrir().prepare('UPDATE usuarios SET visto_em = ? WHERE id = ?').run(Date.now(), id);
 
-// ------------------------------------------------------------------ cadastro
-//
-// Recebe o `google` JA CONFERIDO por server/auth/google.js - este arquivo nunca
-// acredita num token cru vindo do navegador.
+const verificado = (usuario) => Boolean(usuario && usuario.email_verificado_em);
 
-function criarConta({ apelido, senha, google }) {
+// ------------------------------------------------------------------ cadastro
+
+function criarConta({ email, apelido, senha }) {
+  const enderecoLimpo = validarEmail(email);
   const nome = validarApelido(apelido);
   validarSenha(senha);
 
-  if (!google || !google.sub) {
-    throw new ErroDeConta('Conecte sua conta do Google para concluir o cadastro.');
-  }
-  if (porApelido(nome)) {
-    throw new ErroDeConta('Esse apelido já está em uso. Escolha outro.');
-  }
-  // Uma conta do Google por jogador: senao a mesma pessoa criaria apelidos
-  // infinitos e o ranking viraria piada.
-  if (porGoogle(google.sub)) {
-    throw new ErroDeConta('Essa conta do Google já está ligada a outro apelido.');
+  if (porApelido(nome)) throw new ErroDeConta('Esse apelido já está em uso. Escolha outro.');
+  if (porEmail(enderecoLimpo)) {
+    throw new ErroDeConta('Já existe uma conta com esse e-mail. Tente entrar ou recuperar a senha.');
   }
 
   const agora = Date.now();
@@ -148,78 +158,91 @@ function criarConta({ apelido, senha, google }) {
   abrir()
     .prepare(
       `INSERT INTO usuarios
-         (id, apelido, apelido_chave, senha_hash, senha_sal, google_sub, google_email, criado_em, visto_em)
+         (id, apelido, apelido_chave, email, email_chave, senha_hash, senha_sal, criado_em, visto_em)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(id, nome, chaveDoApelido(nome), hash, sal, google.sub, google.email || null, agora, agora);
+    .run(id, nome, chaveDoApelido(nome), enderecoLimpo, chaveDoEmail(enderecoLimpo), hash, sal, agora, agora);
 
   return porId(id);
 }
 
 // ------------------------------------------------------------------ entrada
 
-function entrarComSenha(apelido, senha) {
-  // Mesma mensagem para "conta nao existe" e "senha errada": dizer qual dos
-  // dois errou entregaria quais apelidos existem.
-  const generico = 'Apelido ou senha incorretos.';
-  const usuario = porApelido(apelido);
+function entrarComSenha(login, senha) {
+  // Mesma mensagem para "conta nao existe", "senha errada" e "conta sem senha":
+  // dizer qual dos tres errou entregaria quais apelidos e e-mails existem.
+  const generico = 'Apelido, e-mail ou senha incorretos.';
+  const usuario = porLogin(login);
   if (!usuario) throw new ErroDeConta(generico);
+  if (!usuario.senha_hash) throw new ErroDeConta(generico);
   if (!senhaConfere(senha, usuario.senha_hash, usuario.senha_sal)) throw new ErroDeConta(generico);
   marcarVisto(usuario.id);
   return usuario;
 }
 
-// Entrar pelo botao do Google. NAO cria conta: como a senha e o apelido tambem
-// sao obrigatorios, cadastrar exige passar pelo formulario.
-function entrarComGoogle(google) {
-  if (!google || !google.sub) throw new ErroDeConta('O Google não confirmou sua identidade.');
-  const usuario = porGoogle(google.sub);
-  if (!usuario) {
-    throw new ErroDeConta('Nenhuma conta ligada a este Google. Crie sua conta primeiro.');
+// ------------------------------------------------------------- verificacao
+
+// Chamado quando o link do e-mail e aberto. O token ja foi conferido em
+// dados/tokens.js; aqui so carimbamos a data.
+function marcarEmailVerificado(usuarioId, agora = Date.now()) {
+  const usuario = porId(usuarioId);
+  if (!usuario) throw new ErroDeConta('Conta não encontrada.');
+  // Confirmar duas vezes nao e erro - o segundo clique no mesmo link e um
+  // acidente comum, e ja tinha dado certo.
+  if (!usuario.email_verificado_em) {
+    abrir().prepare('UPDATE usuarios SET email_verificado_em = ? WHERE id = ?').run(agora, usuarioId);
   }
-  // O e-mail pode mudar no Google; o 'sub' nunca muda. Mantemos o e-mail atual
-  // so para aparecer no painel de administracao.
+  return porId(usuarioId);
+}
+
+// Trocar o e-mail antes de confirmar: quem digitou errado precisa de saida.
+// O novo endereco entra como NAO confirmado, obviamente.
+function trocarEmail(usuarioId, novoEmail) {
+  const limpo = validarEmail(novoEmail);
+  const usuario = porId(usuarioId);
+  if (!usuario) throw new ErroDeConta('Conta não encontrada.');
+
+  const dono = porEmail(limpo);
+  if (dono && dono.id !== usuario.id) {
+    throw new ErroDeConta('Já existe uma conta com esse e-mail.');
+  }
+
   abrir()
-    .prepare('UPDATE usuarios SET google_email = ?, visto_em = ? WHERE id = ?')
-    .run(google.email || usuario.google_email, Date.now(), usuario.id);
-  return porId(usuario.id);
+    .prepare('UPDATE usuarios SET email = ?, email_chave = ?, email_verificado_em = NULL WHERE id = ?')
+    .run(limpo, chaveDoEmail(limpo), usuarioId);
+  return porId(usuarioId);
 }
 
 // ------------------------------------------------------------- recuperacao
-//
-// A UNICA porta de recuperacao, e ela nao aceita apelido.
-//
-// Repare no que esta funcao NAO recebe: apelido. Quem chega aqui precisa ter
-// acabado de entrar numa conta do Google, e a conta a ser recuperada e
-// encontrada POR AQUELE Google - nao por um nome digitado. Nao existe caminho
-// em que saber o apelido de alguem ajude a trocar a senha dessa pessoa.
-//
-// A mensagem de erro tambem nao conta se aquele Google tem conta ou nao: isso
-// diria a um curioso se fulano joga aqui.
-function trocarSenhaComGoogle(google, novaSenha) {
-  if (!google || !google.sub) throw new ErroDeConta('O Google não confirmou sua identidade.');
-  validarSenha(novaSenha);
 
-  const usuario = porGoogle(google.sub);
-  if (!usuario) {
-    throw new ErroDeConta('Nenhuma conta ligada a este Google. Crie sua conta primeiro.');
-  }
+// Define a senha nova. O direito de fazer isso ja foi provado pelo token do
+// e-mail, conferido em dados/tokens.js - por isso aqui nao ha apelido nem senha
+// antiga.
+//
+// Confirmar o e-mail junto e de proposito: quem abriu o link provou que a caixa
+// de entrada e dele, que e exatamente o que a verificacao queria descobrir.
+function definirSenhaPorToken(usuarioId, novaSenha, agora = Date.now()) {
+  validarSenha(novaSenha);
+  const usuario = porId(usuarioId);
+  if (!usuario) throw new ErroDeConta('Conta não encontrada.');
 
   const { hash, sal } = embaralharSenha(novaSenha);
   abrir()
     .prepare(
-      'UPDATE usuarios SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?, visto_em = ? WHERE id = ?'
+      `UPDATE usuarios
+          SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?, visto_em = ?,
+              email_verificado_em = COALESCE(email_verificado_em, ?)
+        WHERE id = ?`
     )
-    .run(hash, sal, Date.now(), Date.now(), usuario.id);
-
-  return porId(usuario.id);
+    .run(hash, sal, agora, agora, agora, usuarioId);
+  return porId(usuarioId);
 }
 
-// Trocar a senha estando logado: aqui a senha atual e a prova.
+// Trocar a senha estando logado: aqui a prova e a senha atual.
 function trocarSenha(usuarioId, senhaAtual, novaSenha) {
   const usuario = porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
-  if (!senhaConfere(senhaAtual, usuario.senha_hash, usuario.senha_sal)) {
+  if (usuario.senha_hash && !senhaConfere(senhaAtual, usuario.senha_hash, usuario.senha_sal)) {
     throw new ErroDeConta('Senha atual incorreta.');
   }
   validarSenha(novaSenha);
@@ -227,27 +250,39 @@ function trocarSenha(usuarioId, senhaAtual, novaSenha) {
   const { hash, sal } = embaralharSenha(novaSenha);
   abrir()
     .prepare('UPDATE usuarios SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ? WHERE id = ?')
-    .run(hash, sal, Date.now(), usuario.id);
-  return porId(usuario.id);
+    .run(hash, sal, Date.now(), usuarioId);
+  return porId(usuarioId);
 }
 
-// O que pode sair do servidor: nunca o hash, nunca o sal, nunca o 'sub' do
-// Google (ele identifica a pessoa em qualquer site que use login do Google).
+// O que pode sair do servidor.
+//
+// NUNCA sai: senha_hash e senha_sal. O e-mail sai apenas para o DONO da conta -
+// ele nao aparece para os outros jogadores nem no ranking.
 const paraOCliente = (usuario) =>
-  usuario ? { id: usuario.id, nome: usuario.apelido, temGoogle: Boolean(usuario.google_sub) } : null;
+  usuario
+    ? {
+        id: usuario.id,
+        nome: usuario.apelido,
+        email: usuario.email || null,
+        verificado: verificado(usuario),
+      }
+    : null;
 
 module.exports = {
   ErroDeConta,
   criarConta,
   entrarComSenha,
-  entrarComGoogle,
-  trocarSenhaComGoogle,
+  marcarEmailVerificado,
+  trocarEmail,
+  definirSenhaPorToken,
   trocarSenha,
   criarSessao,
   lerSessao,
   porId,
   porApelido,
-  porGoogle,
+  porEmail,
+  porLogin,
+  verificado,
   paraOCliente,
   DURACAO_DA_SESSAO_MS,
   SENHA_MINIMA,
@@ -255,4 +290,5 @@ module.exports = {
   embaralharSenha,
   senhaConfere,
   validarApelido,
+  validarEmail,
 };

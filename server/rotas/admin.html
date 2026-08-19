@@ -42,7 +42,7 @@
   .apagado { color:var(--suave); font-size:.78rem; }
   .cod { font-family: ui-monospace, Consolas, monospace; font-size:.72rem; color:var(--suave); }
   .marca { display:inline-block; padding:.05rem .45rem; border-radius:999px; font-size:.68rem; border:1px solid var(--borda); color:var(--suave); }
-  .marca--google { color:var(--verde); border-color:rgba(92,201,138,.45); }
+  .marca--ok { color:var(--verde); border-color:rgba(92,201,138,.45); }
   .pontos { color:var(--neon); font-weight:700; }
   .aviso { color:var(--vermelho); min-height:1.2rem; margin:.6rem 0 0; }
   .vazio { color:var(--suave); padding:.6rem .2rem; }
@@ -85,7 +85,7 @@
       <h2>Contas cadastradas (<span id="conta-contas">0</span>)</h2>
       <div class="rolagem"><table>
         <thead><tr>
-          <th>Apelido</th><th>Google conectado</th><th>Cadastro</th><th>Último acesso</th>
+          <th>Apelido</th><th>E-mail</th><th>Cadastro</th><th>Último acesso</th>
           <th class="num">Partidas</th><th class="num">Pontos totais</th>
         </tr></thead>
         <tbody id="contas"></tbody>
@@ -165,13 +165,13 @@ function desenhar(d) {
     id.textContent = c.id;
     nome.appendChild(id);
 
-    // O e-mail do Google mostra QUAL conta está conectada - é ela que serve de
-    // prova na hora de recuperar a senha.
-    const google = celula(l, '');
+    // Confirmado ou não é o dado que mais importa aqui: quem não confirmou
+    // está fora do ranking.
+    const email = celula(l, '');
     const marca = document.createElement('span');
-    marca.className = 'marca marca--google';
-    marca.textContent = c.google_email || 'conectado';
-    google.appendChild(marca);
+    marca.className = 'marca' + (c.email_verificado_em ? ' marca--ok' : '');
+    marca.textContent = (c.email || '—') + (c.email_verificado_em ? ' ✓' : ' (não confirmado)');
+    email.appendChild(marca);
 
     celula(l, quando(c.criado_em), 'apagado');
     const visto = celula(l, quando(c.visto_em), 'apagado');

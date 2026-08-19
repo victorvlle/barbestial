@@ -1044,12 +1044,6 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .painel--login label { margin-top: .8rem; }
 .painel--login .secundario { margin-top: .5rem; }
 
-/* Os botoes do Google sao desenhados pela biblioteca dele; so centralizamos. */
-.bloco-google { display: grid; justify-items: center; }
-#google-entrar, #google-criar, #google-recuperar {
-  display: grid; justify-items: center; min-height: 44px; margin-top: .2rem;
-}
-
 /* Abas Entrar / Criar conta */
 .abas { display: flex; gap: .3rem; margin-bottom: 1.1rem; padding: .25rem; border-radius: 10px; background: #12161f; }
 .aba {
@@ -1067,14 +1061,10 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 }
 .ligacao:hover:not(:disabled) { color: var(--neon); filter: none; }
 
-/* "Google conectado" - a confirmacao verde do passo 3 do cadastro */
+/* Confirmacao verde ("link enviado") */
 .conectado { margin: .5rem 0 0; font-size: .82rem; color: var(--verde); text-align: center; }
 
-.sem-google {
-  margin: 1rem 0 0; padding: .7rem .8rem; border-radius: 10px;
-  background: rgba(224,82,99,.12); border: 1px solid rgba(224,82,99,.4);
-  font-size: .8rem; line-height: 1.45; color: var(--texto);
-}
+
 
 /* "Jogando como Victor [sair]" */
 .quem {
@@ -1151,3 +1141,20 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   #tela-entrada .painel, .ranking { grid-column: 1; justify-self: center; }
   .ranking { width: min(420px, 100%); max-height: none; }
 }
+
+
+/* Faixa de "confirme seu e-mail". Avisa sem travar o jogo. */
+.faixa-email {
+  margin: -.4rem 0 1.1rem; padding: .75rem .85rem; border-radius: 11px;
+  background: rgba(242, 177, 52, .1); border: 1px solid rgba(242, 177, 52, .4);
+}
+.faixa-email p { margin: 0; font-size: .82rem; line-height: 1.5; color: var(--texto); }
+.faixa-email strong { color: var(--neon); word-break: break-all; }
+.faixa-email-acoes { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; }
+.faixa-email .secundario { width: auto; padding: .35rem .7rem; font-size: .78rem; }
+.faixa-email .ligacao { width: auto; margin: 0; padding: .35rem .2rem; }
+#bloco-trocar-email { display: flex; gap: .4rem; margin-top: .6rem; }
+#bloco-trocar-email input { flex: 1; padding: .45rem .6rem; font-size: .85rem; }
+#bloco-trocar-email .secundario { white-space: nowrap; }
+.faixa-email .aviso { text-align: left; font-size: .78rem; margin: .4rem 0 0; min-height: 0; }
+.painel--login .dica { display: block; margin: .35rem 0 .2rem; line-height: 1.45; }

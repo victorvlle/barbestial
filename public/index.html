@@ -25,13 +25,8 @@
 
       <!-- ------------------------------------------------------ ENTRAR -->
       <div class="modo" id="modo-entrar">
-        <div class="bloco-google escondida" id="google-entrar-bloco">
-          <div id="google-entrar"></div>
-          <div class="separador"><span>ou com apelido e senha</span></div>
-        </div>
-
-        <label for="login-nome">Apelido</label>
-        <input id="login-nome" maxlength="16" placeholder="Seu apelido" autocomplete="username" />
+        <label for="login-nome">Apelido ou e-mail</label>
+        <input id="login-nome" maxlength="200" placeholder="Seu apelido ou e-mail" autocomplete="username" />
 
         <label for="login-senha">Senha</label>
         <input id="login-senha" type="password" maxlength="64" placeholder="Sua senha" autocomplete="current-password" />
@@ -42,45 +37,45 @@
 
       <!-- -------------------------------------------------- CRIAR CONTA -->
       <div class="modo escondida" id="modo-criar">
-        <p class="dica">Os três são obrigatórios. O Google é o que vai te devolver
-          a conta se você esquecer a senha.</p>
+        <label for="novo-email">E-mail</label>
+        <input id="novo-email" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
+        <p class="dica">Vamos mandar um link de confirmação. É por ele que você
+          recupera a conta se esquecer a senha.</p>
 
-        <label for="novo-nome">1. Apelido</label>
+        <label for="novo-nome">Apelido</label>
         <input id="novo-nome" maxlength="16" placeholder="Como aparece no ranking" autocomplete="username" />
 
-        <label for="nova-senha">2. Senha</label>
+        <label for="nova-senha">Senha</label>
         <input id="nova-senha" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
 
-        <label>3. Conta do Google</label>
-        <div id="google-criar"></div>
-        <p class="conectado escondida" id="google-criar-ok"></p>
-
-        <button id="btn-criar-conta" class="principal" disabled>Criar conta</button>
+        <button id="btn-criar-conta" class="principal">Criar conta e jogar</button>
       </div>
 
-      <!-- ------------------------------------------------- RECUPERAÇÃO -->
-      <div class="modo escondida" id="modo-recuperar">
+      <!-- ------------------------------------------- ESQUECI A SENHA -->
+      <div class="modo escondida" id="modo-esqueci">
         <h2 class="login-titulo">Recuperar a conta</h2>
-        <p class="dica">Não pedimos seu apelido: quem devolve o acesso é o Google.
-          Entre na conta do Google que você conectou ao se cadastrar.</p>
+        <p class="dica">Digite o e-mail da sua conta. Só pelo e-mail dá para
+          recuperar — saber o apelido de alguém não abre nada.</p>
 
-        <div id="google-recuperar"></div>
-        <p class="conectado escondida" id="google-recuperar-ok"></p>
+        <label for="esqueci-email">E-mail</label>
+        <input id="esqueci-email" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
 
-        <div class="escondida" id="bloco-nova-senha">
-          <label for="senha-nova">Nova senha</label>
-          <input id="senha-nova" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
-          <button id="btn-salvar-senha" class="principal">Salvar e entrar</button>
-        </div>
-
+        <button id="btn-enviar-recuperacao" class="principal">Enviar link</button>
+        <p class="conectado escondida" id="esqueci-ok"></p>
         <button id="btn-voltar-login" class="ligacao">Voltar</button>
       </div>
 
-      <!-- Aparece quando o servidor ainda não tem o Google configurado -->
-      <p class="sem-google escondida" id="sem-google">
-        O cadastro está indisponível: este servidor ainda não foi configurado
-        com o login do Google.
-      </p>
+      <!-- ------------------------------- REDEFINIR (vem do link do e-mail) -->
+      <div class="modo escondida" id="modo-redefinir">
+        <h2 class="login-titulo">Nova senha</h2>
+        <p class="dica">Escolha uma senha nova. Você já entra em seguida.</p>
+
+        <label for="senha-nova">Nova senha</label>
+        <input id="senha-nova" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
+
+        <button id="btn-salvar-senha" class="principal">Salvar e entrar</button>
+        <button id="btn-voltar-login-2" class="ligacao">Voltar</button>
+      </div>
 
       <p class="aviso" id="aviso-login"></p>
     </div>
@@ -89,9 +84,26 @@
   <!-- TELA 1: entrada -->
   <section class="tela" id="tela-entrada">
     <div class="painel">
-      <p class="quem">Jogando como <strong id="quem-sou">—</strong>
+      <p class="quem">
+        <span>Jogando como <strong id="quem-sou">—</strong></span>
         <button id="btn-sair-conta" class="fantasma">sair</button>
       </p>
+
+      <!-- Só aparece enquanto o e-mail não foi confirmado. Não bloqueia o jogo:
+           bloqueia só o ranking, e diz isso. -->
+      <div class="faixa-email escondida" id="faixa-email">
+        <p>Confirme seu e-mail para a sua pontuação valer no ranking.
+          Enviamos um link para <strong id="email-pendente">—</strong>.</p>
+        <div class="faixa-email-acoes">
+          <button id="btn-reenviar" class="secundario">Reenviar e-mail</button>
+          <button id="btn-trocar-email" class="ligacao">Digitei errado</button>
+        </div>
+        <div class="escondida" id="bloco-trocar-email">
+          <input id="email-novo" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
+          <button id="btn-salvar-email" class="secundario">Salvar e reenviar</button>
+        </div>
+        <p class="aviso" id="aviso-email"></p>
+      </div>
 
       <button id="btn-criar" class="principal">Criar uma sala</button>
 

@@ -81,7 +81,7 @@ router.get('/api/admin/dados', sóAdministrador, (req, res) => {
   // Repare nas colunas: nem senha_hash nem senha_sal aparecem na consulta.
   const contas = banco
     .prepare(
-      `SELECT u.id, u.apelido AS nome, u.google_email, u.criado_em, u.visto_em, u.senha_trocada_em,
+      `SELECT u.id, u.apelido AS nome, u.email, u.email_verificado_em, u.criado_em, u.visto_em, u.senha_trocada_em,
               (SELECT COUNT(*) FROM resultados r WHERE r.usuario_id = u.id) AS partidas,
               (SELECT COALESCE(SUM(r.pontos), 0) FROM resultados r WHERE r.usuario_id = u.id) AS pontosTotais
          FROM usuarios u

@@ -6,17 +6,15 @@
 
 const { io } = require('socket.io-client');
 
-// Um cracha falso do Google, aceito so quando GOOGLE_MODO_TESTE=1 e o servidor
-// NAO esta em producao (ver server/auth/google.js). Cada nome vira uma conta
-// Google diferente, como aconteceria na vida real.
-const crachaDeTeste = (nome) => `teste:${nome}:${nome.toLowerCase()}@exemplo.test`;
+// O e-mail de teste de cada apelido. Precisa ser unico por conta.
+const emailDeTeste = (nome) => `${String(nome).toLowerCase()}@exemplo.test`;
 
-// Cria uma conta nova (apelido + senha + Google) e devolve { token, usuario }.
+// Cria uma conta nova (e-mail + apelido + senha) e devolve { token, usuario }.
 async function criarConta(url, nome, senha = 'senha-de-teste') {
   const resposta = await fetch(`${url}/api/conta/criar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, senha, idToken: crachaDeTeste(nome) }),
+    body: JSON.stringify({ email: emailDeTeste(nome), nome, senha }),
   });
   const dados = await resposta.json();
   if (!dados.ok) throw new Error(`não consegui criar a conta ${nome}: ${dados.erro}`);
@@ -24,16 +22,13 @@ async function criarConta(url, nome, senha = 'senha-de-teste') {
 }
 
 // A mesma coisa, mas pela tela: percorre o formulario de cadastro como uma
-// pessoa faria. O botao do Google nao existe em modo de teste (a biblioteca
-// dele nao e carregada), entao a pagina recebe o cracha falso pela mesma funcao
-// que o botao chamaria - o resto do caminho e idêntico.
+// pessoa faria.
 async function entrarNoJogo(pagina, nome, senha = 'senha-de-teste') {
   await pagina.waitForSelector('#tela-login', { state: 'visible', timeout: 10000 });
   await pagina.click('.aba[data-modo="criar"]');
+  await pagina.fill('#novo-email', emailDeTeste(nome));
   await pagina.fill('#novo-nome', nome);
   await pagina.fill('#nova-senha', senha);
-  await pagina.evaluate((cracha) => aoReceberDoGoogle({ credential: cracha }), crachaDeTeste(nome));
-  await pagina.waitForSelector('#btn-criar-conta:not([disabled])', { timeout: 5000 });
   await pagina.click('#btn-criar-conta');
   // 'hidden' e o estado certo aqui: a tela de login some, ela nao vira visivel.
   await pagina.waitForSelector('#tela-login', { state: 'hidden', timeout: 10000 });
@@ -59,13 +54,78 @@ function ambienteDeTeste(porta, extras = {}) {
     PORT: porta,
     BANCO_CAMINHO: ':memory:',
     SESSAO_SEGREDO: 'segredo-de-teste',
-    // Sem isto nao ha como testar o cadastro: ele exige um cracha do Google, e
-    // nao da para gerar um de verdade sem navegador e conta real. A trava que
-    // impede isso de vazar para producao esta em server/auth/google.js.
-    GOOGLE_MODO_TESTE: '1',
     NODE_ENV: 'test',
+    // Sem SMTP configurado, os e-mails saem no console do servidor de teste -
+    // que e exatamente o que precisamos para ler os links sem servidor de
+    // e-mail nenhum.
     ...extras,
   };
 }
 
-module.exports = { criarConta, jogador, entrarNoJogo, ambienteDeTeste, crachaDeTeste };
+// A CAIXA DE ENTRADA DOS TESTES.
+//
+// Sem SMTP configurado, o servidor imprime o e-mail inteiro no console - com o
+// link. Entao para testar o fluxo de verdade (criar conta -> clicar no link ->
+// virar conta confirmada) basta ler a saida do servidor de teste. Nenhuma rota
+// secreta de teste precisa existir no servidor, que e exatamente o que
+// queremos: o que os testes exercitam e o mesmo caminho de producao.
+function capturarEmails(servidor) {
+  let texto = '';
+  const juntar = (pedaco) => { texto += pedaco.toString(); };
+  servidor.stdout.on('data', juntar);
+  servidor.stderr.on('data', juntar);
+
+  const PADRAO = {
+    verificar: /https?:\/\/\S+\/api\/conta\/verificar\?t=[^\s]+/,
+    redefinir: /https?:\/\/\S+\/\?redefinir=[^\s]+/,
+  };
+
+  // Cada e-mail impresso comeca com esta faixa (veja server/email/enviar.js).
+  const blocos = (endereco) =>
+    texto
+      .split('──────── E-MAIL')
+      .filter((b) => b.includes(`Para: ${endereco}\n`));
+
+  return {
+    tudo: () => texto,
+    // Quantos e-mails sairam para este endereco ate agora.
+    quantos: (endereco) => blocos(endereco).length,
+    // O link mais recente daquele tipo, ou null se nao houver nenhum.
+    link(endereco, tipo) {
+      const lista = blocos(endereco);
+      for (let i = lista.length - 1; i >= 0; i--) {
+        const achado = lista[i].match(PADRAO[tipo]);
+        if (achado) return achado[0];
+      }
+      return null;
+    },
+    // So o token do link - util para bater direto na rota.
+    token(endereco, tipo) {
+      const link = this.link(endereco, tipo);
+      return link ? link.split('=').pop() : null;
+    },
+  };
+}
+
+// Confirma o e-mail de uma conta de teste do jeito que uma pessoa faria: pega o
+// link que o servidor mandou e abre. So depois disso a conta entra no ranking.
+async function confirmarEmail(caixa, nome, endereco = emailDeTeste(nome)) {
+  let link = null;
+  for (let i = 0; i < 60 && !link; i++) {
+    link = caixa.link(endereco, 'verificar');
+    if (!link) await new Promise((r) => setTimeout(r, 60));
+  }
+  if (!link) throw new Error(`nenhum e-mail de confirmação chegou para ${endereco}`);
+  const resposta = await fetch(link, { redirect: 'manual' });
+  return resposta.headers.get('location') || '';
+}
+
+module.exports = {
+  criarConta,
+  jogador,
+  entrarNoJogo,
+  ambienteDeTeste,
+  emailDeTeste,
+  capturarEmails,
+  confirmarEmail,
+};

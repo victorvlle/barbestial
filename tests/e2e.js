@@ -7,12 +7,13 @@
 // completo: navegador -> socket -> handlers -> motor -> volta pros dois jogadores.
 const { io } = require('socket.io-client');
 const { spawn } = require('child_process');
-const { jogador, ambienteDeTeste } = require('./ajuda');
+const { jogador, ambienteDeTeste, capturarEmails, confirmarEmail } = require('./ajuda');
 
 const PORTA = 3999;
 const url = `http://localhost:${PORTA}`;
 const raiz = require('path').join(__dirname, '..');
 const servidor = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
+const caixa = capturarEmails(servidor);
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const pedir = (sock, ev, dados) => new Promise((r) => sock.emit(ev, dados, r));
@@ -182,6 +183,9 @@ function check(cond, msg) {
   // ---------------------------------------------------------------------
   console.log('');
   await espera(400); // o servidor grava logo depois de avisar o estado
+
+  // O ranking so mostra quem confirmou o e-mail. Os dois clicam no link.
+  for (const nome of ['Umzinho', 'Doisinho']) await confirmarEmail(caixa, nome);
 
   const tabela = await fetch(`${url}/api/ranking`).then((r) => r.json());
   const linhaUm = tabela.ranking.find((l) => l.id === um.id);
