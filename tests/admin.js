@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
-const { criarConta, ambienteDeTeste, emailDeTeste, capturarEmails } = require('./ajuda');
+const { criarConta, ambienteDeTeste, emailDeTeste } = require('./ajuda');
 const { io } = require('socket.io-client');
 
 const raiz = path.join(__dirname, '..');
@@ -19,7 +19,6 @@ const comAdmin = spawn('node', ['server/index.js'], {
   cwd: raiz,
   env: ambienteDeTeste(PORTA_COM, { ADMIN_SEGREDO: SENHA }),
 });
-const caixa = capturarEmails(comAdmin);
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const pedir = (s, ev, d = {}) => new Promise((r) => s.emit(ev, d, r));
@@ -67,16 +66,6 @@ const comSenha = (senha) =>
   // Cria duas contas e joga uma partida, para o painel ter o que mostrar.
   const a = await criarConta(comUrl, 'Victor');
   const b = await criarConta(comUrl, 'Jorge');
-  // O ranking so mostra quem confirmou o e-mail, entao os dois confirmam - pelo
-  // caminho de verdade, abrindo o link que o servidor mandou.
-  for (const nome of ['Victor', 'Jorge']) {
-    let link = null;
-    for (let i = 0; i < 60 && !link; i++) {
-      link = caixa.link(emailDeTeste(nome), 'verificar');
-      if (!link) await espera(60);
-    }
-    await fetch(link, { redirect: 'manual' });
-  }
   const s1 = io(comUrl, { auth: { token: a.token } });
   const s2 = io(comUrl, { auth: { token: b.token } });
   await Promise.all([s1, s2].map((s) => new Promise((r) => s.once('connect', r))));
@@ -165,6 +154,70 @@ const comSenha = (senha) =>
   check((await pagina.textContent('#ranking')).includes('pts'), 'o ranking aparece com os pontos');
   check((await pagina.textContent('#partidas')).length > 10, 'as últimas partidas aparecem');
   check(!(await pagina.content()).includes('senha_hash'), 'nada de hash na tela');
+
+  // ============================================ 5. definir uma senha nova
+  //
+  // A recuperação de conta deste jogo: ninguém consegue LER a senha de ninguém,
+  // mas o administrador consegue DEFINIR uma nova para quem esqueceu.
+  const senhaNova = (id, nova) =>
+    fetch(`${comUrl}/api/admin/senha`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SENHA}` },
+      body: JSON.stringify({ id, novaSenha: nova }),
+    }).then((r) => r.json());
+
+  const entrar = (nome, senha) =>
+    fetch(`${comUrl}/api/conta/entrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, senha }),
+    }).then((r) => r.json());
+
+  const trocou = await senhaNova(a.usuario.id, 'senha-que-eu-escolhi');
+  check(trocou.ok, 'o administrador define uma senha nova para quem esqueceu');
+  check((await entrar('Victor', 'senha-que-eu-escolhi')).ok, 'e a pessoa entra com ela');
+  check(!(await entrar('Victor', 'senha-de-teste')).ok, 'a senha antiga para de funcionar');
+
+  // As travas dessa rota, que é a mais poderosa do painel.
+  const semSenhaDeAdmin = await fetch(`${comUrl}/api/admin/senha`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: a.usuario.id, novaSenha: 'invadido123' }),
+  });
+  check(semSenhaDeAdmin.status === 401, 'sem a senha de administrador, ninguém troca senha de ninguém');
+  check((await entrar('Victor', 'senha-que-eu-escolhi')).ok, 'e a conta continua com a senha certa');
+
+  const curta = await senhaNova(a.usuario.id, '123');
+  check(!curta.ok && /pelo menos/.test(curta.erro || ''), `senha curta é recusada: "${curta.erro}"`);
+  const inexistente = await senhaNova('id-que-nao-existe', 'senha1234');
+  check(!inexistente.ok, 'conta inexistente também é recusada');
+
+  // A resposta NÃO pode devolver a senha de volta.
+  check(
+    !JSON.stringify(trocou).includes('senha-que-eu-escolhi'),
+    'a resposta não repete a senha que foi definida'
+  );
+
+  // ============================================ 6. exportar para planilha
+  const csv = await fetch(`${comUrl}/api/admin/contas.csv`, {
+    headers: { Authorization: `Bearer ${SENHA}` },
+  });
+  const planilha = await csv.text();
+  check(csv.status === 200, 'o CSV das contas baixa');
+  check(
+    (csv.headers.get('content-type') || '').includes('text/csv'),
+    'com o tipo certo, para o Excel abrir sozinho'
+  );
+  check(planilha.includes('Victor') && planilha.includes('Jorge'), 'e traz as contas dentro');
+  check(planilha.includes(emailDeTeste('Victor')), 'com o e-mail de cada uma');
+  check(
+    !/senha|hash|sal/i.test(planilha),
+    'e NENHUMA senha - planilha é arquivo que se compartilha sem querer'
+  );
+  check(
+    (await fetch(`${comUrl}/api/admin/contas.csv`)).status === 401,
+    'baixar sem a senha de administrador é recusado'
+  );
 
   await pagina.screenshot({ path: path.join(raiz, 'shot-admin.png'), fullPage: true });
 

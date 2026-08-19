@@ -43,6 +43,12 @@
   .cod { font-family: ui-monospace, Consolas, monospace; font-size:.72rem; color:var(--suave); }
   .marca { display:inline-block; padding:.05rem .45rem; border-radius:999px; font-size:.68rem; border:1px solid var(--borda); color:var(--suave); }
   .marca--ok { color:var(--verde); border-color:rgba(92,201,138,.45); }
+  .acao { float:right; font-size:.78rem; font-weight:600; color:var(--neon); cursor:pointer; text-decoration:underline; }
+  button.senha {
+    padding:.28rem .6rem; font-size:.75rem; border-radius:7px; cursor:pointer;
+    background:#1b2331; color:var(--texto); border:1px solid var(--borda);
+  }
+  button.senha:hover { border-color:var(--neon); color:var(--neon); }
   .pontos { color:var(--neon); font-weight:700; }
   .aviso { color:var(--vermelho); min-height:1.2rem; margin:.6rem 0 0; }
   .vazio { color:var(--suave); padding:.6rem .2rem; }
@@ -82,11 +88,13 @@
     <div class="caixa cabecalhos" id="totais"></div>
 
     <div class="caixa">
-      <h2>Contas cadastradas (<span id="conta-contas">0</span>)</h2>
+      <h2>Contas cadastradas (<span id="conta-contas">0</span>)
+        <a id="baixar-csv" class="acao" download>baixar planilha (CSV)</a>
+      </h2>
       <div class="rolagem"><table>
         <thead><tr>
           <th>Apelido</th><th>E-mail</th><th>Cadastro</th><th>Último acesso</th>
-          <th class="num">Partidas</th><th class="num">Pontos totais</th>
+          <th class="num">Partidas</th><th class="num">Pontos totais</th><th>Senha</th>
         </tr></thead>
         <tbody id="contas"></tbody>
       </table></div>
@@ -154,7 +162,7 @@ function desenhar(d) {
   $('contas').innerHTML = '';
   if (!d.contas.length) {
     const l = document.createElement('tr');
-    celula(l, 'Ninguém se cadastrou ainda.', 'vazio').colSpan = 6;
+    celula(l, 'Ninguém se cadastrou ainda.', 'vazio').colSpan = 7;
     $('contas').appendChild(l);
   }
   for (const c of d.contas) {
@@ -165,13 +173,7 @@ function desenhar(d) {
     id.textContent = c.id;
     nome.appendChild(id);
 
-    // Confirmado ou não é o dado que mais importa aqui: quem não confirmou
-    // está fora do ranking.
-    const email = celula(l, '');
-    const marca = document.createElement('span');
-    marca.className = 'marca' + (c.email_verificado_em ? ' marca--ok' : '');
-    marca.textContent = (c.email || '—') + (c.email_verificado_em ? ' ✓' : ' (não confirmado)');
-    email.appendChild(marca);
+    celula(l, c.email || '—');
 
     celula(l, quando(c.criado_em), 'apagado');
     const visto = celula(l, quando(c.visto_em), 'apagado');
@@ -184,6 +186,17 @@ function desenhar(d) {
     }
     celula(l, c.partidas, 'num');
     celula(l, c.pontosTotais, 'num');
+
+    // A recuperação de conta deste jogo: alguém esquece a senha, avisa, e você
+    // define uma nova aqui. NÃO existe "ver a senha" - ela não está guardada em
+    // lugar nenhum, nem para você.
+    const acao = celula(l, '');
+    const botao = document.createElement('button');
+    botao.className = 'senha';
+    botao.textContent = 'nova senha';
+    botao.addEventListener('click', () => trocarSenhaDe(c));
+    acao.appendChild(botao);
+
     $('contas').appendChild(l);
   }
 
@@ -218,6 +231,40 @@ function desenhar(d) {
     celula(l, p.quem || '—');
     $('partidas').appendChild(l);
   }
+}
+
+// Define uma senha nova para alguém. O prompt é de propósito: esta tela é para
+// uma pessoa só, o dono do jogo, e um formulário completo aqui seria enfeite.
+async function trocarSenhaDe(conta) {
+  const nova = prompt(`Senha nova para ${conta.nome} (mínimo 6 caracteres).\n\n` +
+    'Anote antes de confirmar: ela não fica guardada em lugar nenhum, ' +
+    'e você precisa passá-la para a pessoa.');
+  if (nova === null) return;
+
+  const r = await fetch('/api/admin/senha', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + senha },
+    body: JSON.stringify({ id: conta.id, novaSenha: nova }),
+  });
+  const dados = await r.json().catch(() => ({}));
+  if (!dados.ok) return alert('Não deu: ' + (dados.erro || 'erro desconhecido'));
+  alert(`Pronto. A senha de ${conta.nome} agora é a que você digitou.`);
+  carregar();
+}
+
+// O link do CSV precisa da senha, e um <a> comum não manda cabeçalho. Então
+// buscamos com fetch e entregamos o arquivo pelo próprio navegador.
+async function baixarCsv(evento) {
+  evento.preventDefault();
+  const r = await fetch('/api/admin/contas.csv', { headers: { Authorization: 'Bearer ' + senha } });
+  if (!r.ok) return alert('Não consegui exportar.');
+
+  const url = URL.createObjectURL(await r.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'contas-barbestial.csv';
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 async function carregar() {
@@ -257,6 +304,7 @@ $('entrar').addEventListener('click', async () => {
 });
 $('senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('entrar').click(); });
 $('recarregar').addEventListener('click', carregar);
+$('baixar-csv').addEventListener('click', baixarCsv);
 $('sair').addEventListener('click', () => { clearInterval(timer); mostrarEntrada(''); });
 
 // Já entrou nesta aba antes? Entra direto. A senha vive em sessionStorage:

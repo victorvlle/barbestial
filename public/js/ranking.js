@@ -30,6 +30,9 @@ function periodoDaSemana(semana) {
     : `${dia(de)} a ${dia(ate)}`;
 }
 
+// "3 partidas · 2 vitórias", sem plural errado quando é uma só.
+const contar = (quantos, singular, plural) => `${quantos} ${quantos === 1 ? singular : plural}`;
+
 function desenharRanking({ semana, ranking }) {
   const lista = $('ranking-lista');
   $('ranking-periodo').textContent = periodoDaSemana(semana);
@@ -43,28 +46,53 @@ function desenharRanking({ semana, ranking }) {
     return;
   }
 
+  // A barra de cada linha é proporcional a quem está na frente. É o que faz a
+  // lista contar uma história de relance: dá para ver a distância entre o
+  // primeiro e o resto sem ler número nenhum.
+  const maior = Math.max(...ranking.map((j) => j.pontos), 1);
+
   for (const jogador of ranking) {
     const linha = document.createElement('li');
     linha.className = 'ranking-linha';
+    if (jogador.posicao <= 3) linha.classList.add(`ranking-linha--p${jogador.posicao}`);
     // Destaque para quem está olhando: achar a própria posição numa lista longa
     // é a primeira coisa que qualquer pessoa tenta fazer num ranking.
     if (CONTA && jogador.id === CONTA.id) linha.classList.add('ranking-linha--eu');
 
+    // A barra fica atrás do conteúdo, presa na largura proporcional.
+    const barra = document.createElement('span');
+    barra.className = 'ranking-barra';
+    barra.style.width = `${Math.max(6, Math.round((jogador.pontos / maior) * 100))}%`;
+
     const posicao = document.createElement('span');
     posicao.className = 'ranking-posicao';
-    posicao.textContent = MEDALHAS[jogador.posicao - 1] || `${jogador.posicao}.`;
+    posicao.textContent = MEDALHAS[jogador.posicao - 1] || jogador.posicao;
+
+    const quem = document.createElement('span');
+    quem.className = 'ranking-quem';
 
     const nome = document.createElement('span');
     nome.className = 'ranking-nome';
     // textContent, nunca innerHTML: o nome vem de outra pessoa.
     nome.textContent = jogador.nome;
-    nome.title = `${jogador.partidas} partida(s), ${jogador.vitorias} vitória(s)`;
+
+    const meta = document.createElement('span');
+    meta.className = 'ranking-meta';
+    meta.textContent =
+      `${contar(jogador.partidas, 'partida', 'partidas')} · ` +
+      `${contar(jogador.vitorias, 'vitória', 'vitórias')}`;
+
+    quem.append(nome, meta);
 
     const pontos = document.createElement('span');
     pontos.className = 'ranking-pontos';
-    pontos.textContent = `${jogador.pontos} pts`;
+    const numero = document.createElement('strong');
+    numero.textContent = jogador.pontos;
+    const unidade = document.createElement('small');
+    unidade.textContent = 'pts';
+    pontos.append(numero, unidade);
 
-    linha.append(posicao, nome, pontos);
+    linha.append(barra, posicao, quem, pontos);
     lista.appendChild(linha);
   }
 }

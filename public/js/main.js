@@ -437,30 +437,13 @@ document.addEventListener('keydown', (e) => {
 
 $('btn-login').addEventListener('click', entrarComSenha);
 $('btn-criar-conta').addEventListener('click', criarConta);
-$('btn-esqueci').addEventListener('click', () => irPara('esqueci'));
-$('btn-enviar-recuperacao').addEventListener('click', pedirRecuperacao);
-$('btn-salvar-senha').addEventListener('click', salvarNovaSenha);
-$('btn-voltar-login').addEventListener('click', () => irPara('entrar'));
-$('btn-voltar-login-2').addEventListener('click', () => irPara('entrar'));
 $('btn-sair-conta').addEventListener('click', sair);
-
-// Faixa de confirmação do e-mail
-$('btn-reenviar').addEventListener('click', reenviarConfirmacao);
-$('btn-trocar-email').addEventListener('click', () => {
-  $('bloco-trocar-email').classList.toggle('escondida');
-  $('email-novo').value = (CONTA && CONTA.email) || '';
-  $('email-novo').focus();
-});
-$('btn-salvar-email').addEventListener('click', salvarEmailNovo);
 
 // Enter em cada formulário aciona o botão daquele formulário.
 const aoApertarEnter = (campo, botao) =>
   $(campo).addEventListener('keydown', (e) => { if (e.key === 'Enter') $(botao).click(); });
 aoApertarEnter('login-senha', 'btn-login');
 aoApertarEnter('nova-senha', 'btn-criar-conta');
-aoApertarEnter('esqueci-email', 'btn-enviar-recuperacao');
-aoApertarEnter('senha-nova', 'btn-salvar-senha');
-aoApertarEnter('email-novo', 'btn-salvar-email');
 
 carregarCatalogo();
 carregarMusica();

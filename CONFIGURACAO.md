@@ -14,12 +14,7 @@ configurar nada. As variáveis existem para produção.
 | `SESSAO_SEGREDO` | Chave que assina os crachás de sessão | sorteada a cada boot |
 | `FUSO_MINUTOS` | Fuso usado para decidir quando a semana vira | `-180` (Brasília) |
 | `LIMITE_TURNO_MS` | Tempo de cada turno | `35000` |
-| `SMTP_HOST` | Servidor de e-mail (envio) | vazio (os e-mails saem no log) |
-| `SMTP_PORTA` | Porta do servidor de e-mail | `587` |
-| `SMTP_USUARIO` | Usuário do servidor de e-mail | vazio |
-| `SMTP_SENHA` | Senha do servidor de e-mail | vazio |
-| `EMAIL_REMETENTE` | Quem assina os e-mails | `Bar Bestial <nao-responda@barbestial.local>` |
-| `URL_PUBLICA` | Endereço usado nos links dos e-mails | `RENDER_EXTERNAL_URL`, ou `localhost` |
+| `ADMIN_SEGREDO` | Senha do painel `/admin` | vazio (o painel não existe) |
 
 Três delas merecem atenção em produção:
 
@@ -30,82 +25,42 @@ e o ranking. Com ela, o banco fica fora do servidor e os dados sobrevivem a
 tudo isso. Veja "Ligando o banco no Turso" abaixo.
 
 **`SESSAO_SEGREDO`** precisa ser fixa. Sem ela, o servidor sorteia uma chave
-nova a cada boot e todo mundo é deslogado a cada deploy. No Render, o
-`generateValue: true` do `render.yaml` resolve isso — o Render sorteia uma vez e
+nova a cada boot e todo mundo é deslogado — e no plano gratuito, onde o servidor
+hiberna depois de 15 minutos parado, isso acontece várias vezes por dia. No
+Render, o `generateValue: true` do `render.yaml` resolve: ele sorteia uma vez e
 guarda.
 
-**`SMTP_*`** decide se o e-mail sai de verdade. Sem essas variáveis nada quebra:
-o servidor imprime o e-mail inteiro — com o link — no próprio log. Dá para
-desenvolver e até socorrer alguém em produção lendo o log. Mas ninguém consegue
-confirmar a conta sozinho, e sem confirmar a pontuação não entra no ranking.
-
-## Ligando o envio de e-mail
-
-Qualquer provedor que fale SMTP serve — Gmail com senha de app, Brevo, Resend,
-Mailgun, o que você preferir. Nenhum código muda; é só preencher no painel do
-Render, em **Environment**:
-
-```
-SMTP_HOST=smtp.seuprovedor.com
-SMTP_PORTA=587
-SMTP_USUARIO=voce@seudominio.com
-SMTP_SENHA=<a senha ou chave do provedor>
-EMAIL_REMETENTE=Bar Bestial <voce@seudominio.com>
-URL_PUBLICA=https://barbestial.onrender.com
-```
-
-`URL_PUBLICA` é o endereço que vai dentro dos links. No Render, se você não
-definir, o próprio `RENDER_EXTERNAL_URL` é usado.
-
-**A senha do SMTP fica só no servidor.** Nada disso aparece no JavaScript do
-navegador: a única coisa que a página pergunta é `/api/conta/config`, que
-devolve apenas `email: true|false` (se o envio está ligado) e o tamanho mínimo
-da senha. Um teste confere essa lista campo a campo — qualquer coisa nova que
-alguém coloque lá derruba a suíte.
-
-**Se o envio falhar, o cadastro continua valendo.** O erro é registrado no log e
-a pessoa entra no jogo assim mesmo; ela usa o botão "Reenviar e-mail" depois.
-Perder um e-mail não pode custar um cadastro.
+**`ADMIN_SEGREDO`** é o que liga o painel `/admin`, e é por lá que você define
+uma senha nova para quem esqueceu a dela. Sem essa variável o painel não existe
+(responde 404) — e aí ninguém tem como recuperar conta nenhuma.
 
 ## Como funciona a conta
 
-Uma conta tem três coisas, todas obrigatórias: **e-mail, apelido e senha**. O
-apelido é o que aparece no ranking; o e-mail ninguém vê.
+Uma conta tem três coisas: **e-mail, apelido e senha**. O apelido é o que
+aparece no ranking; o e-mail ninguém vê.
 
-| momento | o que acontece |
-|---|---|
-| cadastro | a conta nasce **já logada** e um link de confirmação é enviado |
-| antes de confirmar | joga tudo normalmente, mas **fica fora do ranking** |
-| clicou no link | a pontuação que já era dela passa a aparecer — nada se perde |
-| esqueceu a senha | pede pelo **e-mail** e recebe um link de 1 hora |
+Não há etapa nenhuma entre preencher o cadastro e jogar: a conta já nasce
+logada e a pontuação vale no ranking desde a primeira partida.
 
-A escolha de deixar jogar antes de confirmar é de propósito: a primeira partida
-é o momento em que a pessoa decide se volta. Travar o jogo ali custaria mais do
-que ganharia. O ranking, sim, exige confirmação — e isso protege a tabela de
-quem tentaria farmar pontos com contas descartáveis.
+### Por que não existe "esqueci minha senha"
 
-### Recuperar a senha
+Recuperar senha sozinho exige mandar e-mail, e o servidor gratuito onde o jogo
+roda **bloqueia as portas de SMTP**. Um botão que promete um link que nunca
+chega é pior do que não ter botão.
 
-**Só pelo e-mail.** A rota `/api/conta/esqueci` não recebe apelido, e isso é a
-trava mais importante do sistema: o apelido está no ranking, à vista de todo
-mundo. Se ele recuperasse senha, a lista de campeões viraria uma lista de alvos.
+Então a recuperação é combinada: quem esquece a senha avisa o dono do jogo, que
+define uma nova no painel `/admin`. É para isso que o e-mail é pedido no
+cadastro — é como saber de quem é cada conta.
 
-A resposta é **sempre a mesma**, exista a conta ou não — senão a rota viraria um
-consultor gratuito de "este e-mail tem conta aqui?".
+### As senhas
 
-### Os links do e-mail
+Guardadas como `scrypt(senha, sal)`, nunca em texto. **Ninguém consegue ler a
+senha de ninguém**, nem o administrador, nem quem invadir o banco. O painel
+`/admin` só consegue *definir* uma nova — ler e escrever são coisas diferentes,
+e só a segunda é necessária para resolver o problema de quem esqueceu.
 
-Guardamos apenas o **hash** de cada token (`tokens.hash`), nunca o token em si:
-quem lesse o banco não conseguiria usar um link. Além disso:
-
-- servem **uma vez só**;
-- valem 48 horas (confirmação) ou 1 hora (recuperação);
-- pedir um novo **invalida o anterior** do mesmo tipo;
-- o link de confirmar e-mail **não** serve para trocar senha, e vice-versa;
-- apagar uma conta apaga os tokens dela junto (`ON DELETE CASCADE`).
-
-E um limite de **um e-mail por minuto por endereço**, para o "esqueci a senha"
-não virar um jeito de bombardear a caixa de entrada de outra pessoa.
+Se o banco vazar, as senhas não vão junto. Como quase todo mundo repete senha,
+o que estaria em jogo não seria a conta no jogo: seria o e-mail das pessoas.
 
 ## Ligando o banco no Turso
 
@@ -220,15 +175,14 @@ freadas por IP; acertos não contam para o freio.
 
 O painel nunca devolve `senha_hash` nem `senha_sal` — nem para o administrador.
 
+Duas coisas que ele **faz**:
+
+- **Definir uma senha nova** para uma conta (botão "nova senha" na linha dela).
+  É a recuperação de conta deste jogo. A senha não volta na resposta nem fica
+  guardada: você combina com a pessoa por fora.
+- **Baixar a planilha** das contas em CSV, que o Excel e o Google Sheets abrem
+  com dois cliques. É a sua cópia dos dados, na sua mão. Sem senha nenhuma
+  dentro — planilha é arquivo que se compartilha por link sem querer.
+
 Alternativa sem expor nada na internet: `npm run contas`, pelo Shell do Render.
 
-## Testando o fluxo de e-mail
-
-Sem SMTP configurado, o servidor imprime cada e-mail no console — com o link
-inteiro. É assim que os testes automatizados percorrem o caminho completo
-(cadastro → link → conta confirmada → ranking) sem nenhum servidor de e-mail e,
-principalmente, **sem nenhuma rota secreta de teste no servidor**: o que os
-testes exercitam é exatamente o código de produção.
-
-Para experimentar na sua máquina: rode `npm start`, crie uma conta e olhe o
-terminal — o link está lá.

@@ -206,14 +206,6 @@ async function rankingDaSemana(chave = chaveDaSemana(), limite = 100) {
          FROM resultados r
          JOIN usuarios  u ON u.id = r.usuario_id
         WHERE r.semana = ?
-          -- SO QUEM CONFIRMOU O E-MAIL APARECE. As partidas de quem ainda nao
-          -- confirmou continuam gravadas (o historico e completo); elas so nao
-          -- entram na classificacao. No dia em que a pessoa clicar no link, a
-          -- pontuacao dela aparece inteira, sem precisar rejogar nada.
-          --
-          -- E tambem o que segura o ranking honesto: sem isso, bastaria criar
-          -- contas descartaveis para farmar pontos contra si mesmo.
-          AND u.email_verificado_em IS NOT NULL
         GROUP BY u.id, u.apelido
         ORDER BY pontos DESC, partidas ASC, u.apelido COLLATE NOCASE ASC
         LIMIT ?`,

@@ -55,77 +55,8 @@ function ambienteDeTeste(porta, extras = {}) {
     BANCO_CAMINHO: ':memory:',
     SESSAO_SEGREDO: 'segredo-de-teste',
     NODE_ENV: 'test',
-    // Sem SMTP configurado, os e-mails saem no console do servidor de teste -
-    // que e exatamente o que precisamos para ler os links sem servidor de
-    // e-mail nenhum.
     ...extras,
   };
 }
 
-// A CAIXA DE ENTRADA DOS TESTES.
-//
-// Sem SMTP configurado, o servidor imprime o e-mail inteiro no console - com o
-// link. Entao para testar o fluxo de verdade (criar conta -> clicar no link ->
-// virar conta confirmada) basta ler a saida do servidor de teste. Nenhuma rota
-// secreta de teste precisa existir no servidor, que e exatamente o que
-// queremos: o que os testes exercitam e o mesmo caminho de producao.
-function capturarEmails(servidor) {
-  let texto = '';
-  const juntar = (pedaco) => { texto += pedaco.toString(); };
-  servidor.stdout.on('data', juntar);
-  servidor.stderr.on('data', juntar);
-
-  const PADRAO = {
-    verificar: /https?:\/\/\S+\/api\/conta\/verificar\?t=[^\s]+/,
-    redefinir: /https?:\/\/\S+\/\?redefinir=[^\s]+/,
-  };
-
-  // Cada e-mail impresso comeca com esta faixa (veja server/email/enviar.js).
-  const blocos = (endereco) =>
-    texto
-      .split('──────── E-MAIL')
-      .filter((b) => b.includes(`Para: ${endereco}\n`));
-
-  return {
-    tudo: () => texto,
-    // Quantos e-mails sairam para este endereco ate agora.
-    quantos: (endereco) => blocos(endereco).length,
-    // O link mais recente daquele tipo, ou null se nao houver nenhum.
-    link(endereco, tipo) {
-      const lista = blocos(endereco);
-      for (let i = lista.length - 1; i >= 0; i--) {
-        const achado = lista[i].match(PADRAO[tipo]);
-        if (achado) return achado[0];
-      }
-      return null;
-    },
-    // So o token do link - util para bater direto na rota.
-    token(endereco, tipo) {
-      const link = this.link(endereco, tipo);
-      return link ? link.split('=').pop() : null;
-    },
-  };
-}
-
-// Confirma o e-mail de uma conta de teste do jeito que uma pessoa faria: pega o
-// link que o servidor mandou e abre. So depois disso a conta entra no ranking.
-async function confirmarEmail(caixa, nome, endereco = emailDeTeste(nome)) {
-  let link = null;
-  for (let i = 0; i < 60 && !link; i++) {
-    link = caixa.link(endereco, 'verificar');
-    if (!link) await new Promise((r) => setTimeout(r, 60));
-  }
-  if (!link) throw new Error(`nenhum e-mail de confirmação chegou para ${endereco}`);
-  const resposta = await fetch(link, { redirect: 'manual' });
-  return resposta.headers.get('location') || '';
-}
-
-module.exports = {
-  criarConta,
-  jogador,
-  entrarNoJogo,
-  ambienteDeTeste,
-  emailDeTeste,
-  capturarEmails,
-  confirmarEmail,
-};
+module.exports = { criarConta, jogador, entrarNoJogo, ambienteDeTeste, emailDeTeste };

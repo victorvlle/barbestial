@@ -8,18 +8,17 @@
 // o mesmo contrato que o resto do jogo ja usa nos acknowledgements do socket.
 //
 // AS PORTAS DE CONTA:
-//   POST /conta/criar       e-mail + apelido + senha
-//   POST /conta/entrar      apelido OU e-mail + senha
-//   GET  /conta/verificar   o link que chega por e-mail (abre no navegador)
-//   POST /conta/reenviar    estando logado, manda o link de confirmacao de novo
-//   POST /conta/trocar-email estando logado, corrige o e-mail digitado errado
-//   POST /conta/esqueci     manda o link de recuperacao
-//   POST /conta/redefinir   token do e-mail + senha nova
-//   POST /conta/senha       estando logado, troca a senha
+//   POST /conta/criar   e-mail + apelido + senha; ja entra jogando
+//   POST /conta/entrar  apelido OU e-mail + senha
+//   POST /conta/senha   estando logado, troca a senha
+//   GET  /conta/eu      "ainda estou logado?"
 //
-// Repare que /conta/esqueci recebe E-MAIL, nunca apelido. O apelido aparece no
-// ranking para todo mundo; usa-lo como chave de recuperacao transformaria a
-// lista de campeoes numa lista de alvos.
+// NAO EXISTE RECUPERACAO AUTOMATICA, e isso e uma decisao, nao um esquecimento.
+// Recuperar senha sozinho exige mandar e-mail, e o servidor gratuito onde o
+// jogo roda bloqueia as portas de SMTP. Em vez de um botao que promete um
+// e-mail que nunca chega, quem esquecer a senha fala com o administrador, que
+// define uma nova pelo painel /admin. O e-mail continua sendo pedido no
+// cadastro: e como o administrador sabe com quem esta falando.
 //
 // SOBRE CSRF: nao se aplica a esta arquitetura. O cracha de sessao viaja no
 // cabecalho Authorization, nunca em cookie - e um site de terceiros nao
@@ -34,8 +33,6 @@
 
 const express = require('express');
 const usuarios = require('../dados/usuarios');
-const tokens = require('../dados/tokens');
-const correio = require('../email/enviar');
 const ranking = require('../dados/ranking');
 
 const router = express.Router();
@@ -77,29 +74,13 @@ const comFreio = (acao) => async (req, res) => {
   }
 };
 
-// ---------------------------------------------- freio proprio para o e-mail
-//
-// Mandar e-mail custa dinheiro e reputacao de dominio. Sem um limite, alguem
-// poderia usar o "esqueci a senha" para bombardear a caixa de entrada de outra
-// pessoa. Um pedido por minuto por endereco resolve.
-
-const ENTRE_EMAILS_MS = 60 * 1000;
-const ultimoEmail = new Map();
-
-function podeMandarEmail(chave) {
-  const agora = Date.now();
-  if ((ultimoEmail.get(chave) || 0) + ENTRE_EMAILS_MS > agora) return false;
-  ultimoEmail.set(chave, agora);
-  return true;
-}
-
 // Envolve um handler para que ErroDeConta e ErroDeToken virem respostas
 // amigaveis, e um erro inesperado nao derrube o servidor nem vaze detalhes.
 const responder = (acao) => async (req, res) => {
   try {
     res.json({ ok: true, ...((await acao(req, res)) || {}) });
   } catch (erro) {
-    const esperado = erro instanceof usuarios.ErroDeConta || erro instanceof tokens.ErroDeToken;
+    const esperado = erro instanceof usuarios.ErroDeConta;
     if (!esperado) console.error('[conta]', erro);
     res.status(esperado ? 400 : 500).json({
       ok: false,
@@ -120,34 +101,19 @@ function usuarioDoPedido(req) {
   return usuarios.lerSessao(token);
 }
 
-// Cria o link e manda. Nunca lanca: falhar em enviar e-mail nao pode custar um
-// cadastro (a pessoa usa o botao de reenviar).
-async function mandarVerificacao(usuario) {
-  if (!usuario.email) return;
-  const token = await tokens.criar(usuario.id, 'verificar');
-  await correio.enviarVerificacao(usuario, token);
-}
-
 // ------------------------------------------------------------------ rotas
 
 router.get('/conta/config', (_req, res) => {
-  res.json({
-    ok: true,
-    email: correio.ligado(), // false = os links saem no log do servidor
-    senhaMinima: usuarios.SENHA_MINIMA,
-  });
+  res.json({ ok: true, senhaMinima: usuarios.SENHA_MINIMA });
 });
 
-// Cadastro. A conta ja nasce logada: a pessoa entra e joga na hora, e o e-mail
-// de confirmacao chega enquanto ela joga.
+// Cadastro. A conta ja nasce logada: a pessoa preenche, entra e joga - sem
+// nenhuma etapa no meio.
 router.post(
   '/conta/criar',
   responder(comFreio(async (req) => {
     const { email, nome, senha } = req.body || {};
-    const usuario = await usuarios.criarConta({ email, apelido: nome, senha });
-    podeMandarEmail(usuario.email_chave);
-    await mandarVerificacao(usuario);
-    return comSessao(usuario);
+    return comSessao(await usuarios.criarConta({ email, apelido: nome, senha }));
   }))
 );
 
@@ -156,81 +122,6 @@ router.post(
   responder(comFreio(async (req) => {
     const { nome, senha } = req.body || {};
     return comSessao(await usuarios.entrarComSenha(nome, senha));
-  }))
-);
-
-// O LINK DO E-MAIL. Abre direto no navegador, entao responde com um redirecionamento
-// em vez de JSON - quem clica e uma pessoa, nao um programa.
-router.get('/conta/verificar', async (req, res) => {
-  try {
-    const usuarioId = await tokens.consumir(req.query.t, 'verificar');
-    await usuarios.marcarEmailVerificado(usuarioId);
-    res.redirect('/?verificado=1');
-  } catch (erro) {
-    console.warn('[conta] verificação recusada:', erro.message);
-    res.redirect('/?verificado=0');
-  }
-});
-
-// Reenviar a confirmacao, estando logado.
-router.post(
-  '/conta/reenviar',
-  responder(async (req) => {
-    const eu = await usuarioDoPedido(req);
-    if (!eu) throw new usuarios.ErroDeConta('Sessão expirada. Entre de novo.');
-    if (usuarios.verificado(eu)) return { jaVerificado: true };
-    if (!podeMandarEmail(eu.email_chave)) {
-      throw new usuarios.ErroDeConta('Já enviamos um e-mail agora há pouco. Espere um minuto.');
-    }
-    await mandarVerificacao(eu);
-    return { enviado: true };
-  })
-);
-
-// Corrigir o e-mail digitado errado (so antes de confirmar).
-router.post(
-  '/conta/trocar-email',
-  responder(comFreio(async (req) => {
-    const eu = await usuarioDoPedido(req);
-    if (!eu) throw new usuarios.ErroDeConta('Sessão expirada. Entre de novo.');
-    if (usuarios.verificado(eu)) {
-      throw new usuarios.ErroDeConta('Seu e-mail já foi confirmado.');
-    }
-    const atualizado = await usuarios.trocarEmail(eu.id, (req.body || {}).email);
-    podeMandarEmail(atualizado.email_chave);
-    await mandarVerificacao(atualizado);
-    return { usuario: usuarios.paraOCliente(atualizado) };
-  }))
-);
-
-// "Esqueci minha senha".
-//
-// RESPONDE SEMPRE A MESMA COISA, exista a conta ou nao. Se a resposta mudasse,
-// esta rota viraria um consultor gratuito de "este e-mail tem conta aqui?" -
-// util para quem monta lista de alvos, e um vazamento de privacidade dos
-// jogadores.
-router.post(
-  '/conta/esqueci',
-  responder(async (req) => {
-    const email = String((req.body || {}).email || '').trim();
-    const usuario = email ? await usuarios.porEmail(email) : null;
-
-    if (usuario && usuario.email && podeMandarEmail(`rec:${usuario.email_chave}`)) {
-      const token = await tokens.criar(usuario.id, 'recuperar');
-      await correio.enviarRecuperacao(usuario, token);
-    }
-    return { mensagem: 'Se existir uma conta com esse e-mail, o link de recuperação está a caminho.' };
-  })
-);
-
-// Define a senha nova a partir do link. Ja devolve a sessao: a pessoa acabou de
-// provar que e dona da caixa de entrada, nao faz sentido pedir login em seguida.
-router.post(
-  '/conta/redefinir',
-  responder(comFreio(async (req) => {
-    const { token, novaSenha } = req.body || {};
-    const usuarioId = await tokens.consumir(token, 'recuperar');
-    return comSessao(await usuarios.definirSenhaPorToken(usuarioId, novaSenha));
   }))
 );
 

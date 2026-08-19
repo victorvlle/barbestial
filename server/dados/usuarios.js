@@ -6,15 +6,20 @@
 //   apelido - o nome no ranking e o login do dia a dia
 //   senha   - guardada como scrypt(senha, sal); a senha em si nao existe aqui
 //
-// O E-MAIL PRECISA SER CONFIRMADO, mas nao para jogar - para PONTUAR. Quem
-// acabou de se cadastrar entra e joga na hora; a pontuacao so entra no ranking
-// depois do clique no link. A troca e proposital: um e-mail que demora nao
-// custa um jogador, e ainda da um motivo concreto para confirmar.
+// O E-MAIL NAO E CONFIRMADO POR LINK. O servidor gratuito onde o jogo roda
+// bloqueia as portas de envio de e-mail, entao pedir confirmacao seria pedir
+// algo que ninguem consegue fazer. Ele e guardado por outro motivo: e como o
+// administrador identifica de quem e cada conta quando alguem pede ajuda.
 //
-// POR QUE SO PELO E-MAIL SE RECUPERA: se desse para recuperar sabendo o
-// apelido, o apelido - que aparece no ranking para todo mundo - viraria o
-// primeiro passo para roubar uma conta. Quem nao tem acesso a caixa de entrada
-// nao tem por onde comecar.
+// QUEM ESQUECE A SENHA fala com o administrador, que define uma nova pelo
+// painel /admin (ver definirSenha aqui embaixo). Nao existe recuperacao
+// automatica - e melhor nao ter do que ter um botao que promete um e-mail que
+// nunca chega.
+//
+// A SENHA NUNCA E GUARDADA EM TEXTO. Nem para o administrador: o painel nao
+// mostra senha de ninguem, ele so consegue DEFINIR uma nova. Se o banco vazar,
+// as senhas nao vao junto - e como quase todo mundo repete senha, o que estaria
+// em jogo seria o e-mail das pessoas, nao so a conta no jogo.
 //
 // TUDO AQUI E ASSINCRONO desde que o banco saiu para a nuvem (ver banco.js):
 // toda funcao que toca no banco devolve uma promessa e precisa de `await`.
@@ -139,8 +144,6 @@ const porLogin = (texto) =>
 const marcarVisto = (id) =>
   banco.rodar('UPDATE usuarios SET visto_em = ? WHERE id = ?', [Date.now(), id]);
 
-const verificado = (usuario) => Boolean(usuario && usuario.email_verificado_em);
-
 // ------------------------------------------------------------------ cadastro
 
 async function criarConta({ email, apelido, senha }) {
@@ -181,23 +184,8 @@ async function entrarComSenha(login, senha) {
   return usuario;
 }
 
-// ------------------------------------------------------------- verificacao
-
-// Chamado quando o link do e-mail e aberto. O token ja foi conferido em
-// dados/tokens.js; aqui so carimbamos a data.
-async function marcarEmailVerificado(usuarioId, agora = Date.now()) {
-  const usuario = await porId(usuarioId);
-  if (!usuario) throw new ErroDeConta('Conta não encontrada.');
-  // Confirmar duas vezes nao e erro - o segundo clique no mesmo link e um
-  // acidente comum, e ja tinha dado certo.
-  if (!usuario.email_verificado_em) {
-    await banco.rodar('UPDATE usuarios SET email_verificado_em = ? WHERE id = ?', [agora, usuarioId]);
-  }
-  return porId(usuarioId);
-}
-
-// Trocar o e-mail antes de confirmar: quem digitou errado precisa de saida.
-// O novo endereco entra como NAO confirmado, obviamente.
+// Corrigir o e-mail de uma conta. Hoje so o painel /admin usa isto - a pessoa
+// avisa que digitou errado e o administrador ajusta.
 async function trocarEmail(usuarioId, novoEmail) {
   const limpo = validarEmail(novoEmail);
   const usuario = await porId(usuarioId);
@@ -209,7 +197,7 @@ async function trocarEmail(usuarioId, novoEmail) {
   }
 
   await banco.rodar(
-    'UPDATE usuarios SET email = ?, email_chave = ?, email_verificado_em = NULL WHERE id = ?',
+    'UPDATE usuarios SET email = ?, email_chave = ? WHERE id = ?',
     [limpo, chaveDoEmail(limpo), usuarioId]
   );
   return porId(usuarioId);
@@ -217,13 +205,10 @@ async function trocarEmail(usuarioId, novoEmail) {
 
 // ------------------------------------------------------------- recuperacao
 
-// Define a senha nova. O direito de fazer isso ja foi provado pelo token do
-// e-mail, conferido em dados/tokens.js - por isso aqui nao ha apelido nem senha
-// antiga.
-//
-// Confirmar o e-mail junto e de proposito: quem abriu o link provou que a caixa
-// de entrada e dele, que e exatamente o que a verificacao queria descobrir.
-async function definirSenhaPorToken(usuarioId, novaSenha, agora = Date.now()) {
+// Define uma senha nova SEM pedir a antiga. So o painel /admin chama isto, e a
+// autorizacao acontece la (ADMIN_SEGREDO). Existe para o caso combinado com o
+// dono do jogo: alguem esquece a senha, avisa, e recebe uma nova.
+async function definirSenha(usuarioId, novaSenha, agora = Date.now()) {
   validarSenha(novaSenha);
   const usuario = await porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
@@ -231,10 +216,9 @@ async function definirSenhaPorToken(usuarioId, novaSenha, agora = Date.now()) {
   const { hash, sal } = embaralharSenha(novaSenha);
   await banco.rodar(
     `UPDATE usuarios
-        SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?, visto_em = ?,
-            email_verificado_em = COALESCE(email_verificado_em, ?)
+        SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?
       WHERE id = ?`,
-    [hash, sal, agora, agora, agora, usuarioId]
+    [hash, sal, agora, usuarioId]
   );
   return porId(usuarioId);
 }
@@ -266,7 +250,6 @@ const paraOCliente = (usuario) =>
         id: usuario.id,
         nome: usuario.apelido,
         email: usuario.email || null,
-        verificado: verificado(usuario),
       }
     : null;
 
@@ -274,9 +257,8 @@ module.exports = {
   ErroDeConta,
   criarConta,
   entrarComSenha,
-  marcarEmailVerificado,
   trocarEmail,
-  definirSenhaPorToken,
+  definirSenha,
   trocarSenha,
   criarSessao,
   lerSessao,
@@ -284,7 +266,6 @@ module.exports = {
   porApelido,
   porEmail,
   porLogin,
-  verificado,
   paraOCliente,
   DURACAO_DA_SESSAO_MS,
   SENHA_MINIMA,

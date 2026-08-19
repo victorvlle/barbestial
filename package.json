@@ -24,7 +24,6 @@
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "express": "^4.19.2",
-    "nodemailer": "^9.0.5",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

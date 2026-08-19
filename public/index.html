@@ -32,15 +32,14 @@
         <input id="login-senha" type="password" maxlength="64" placeholder="Sua senha" autocomplete="current-password" />
 
         <button id="btn-login" class="principal">Entrar</button>
-        <button id="btn-esqueci" class="ligacao">Esqueci minha senha</button>
       </div>
 
       <!-- -------------------------------------------------- CRIAR CONTA -->
       <div class="modo escondida" id="modo-criar">
         <label for="novo-email">E-mail</label>
         <input id="novo-email" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
-        <p class="dica">Vamos mandar um link de confirmação. É por ele que você
-          recupera a conta se esquecer a senha.</p>
+        <p class="dica">Guardamos seu e-mail para conseguir devolver sua conta
+          se você esquecer a senha. Ele não aparece para ninguém.</p>
 
         <label for="novo-nome">Apelido</label>
         <input id="novo-nome" maxlength="16" placeholder="Como aparece no ranking" autocomplete="username" />
@@ -51,59 +50,32 @@
         <button id="btn-criar-conta" class="principal">Criar conta e jogar</button>
       </div>
 
-      <!-- ------------------------------------------- ESQUECI A SENHA -->
-      <div class="modo escondida" id="modo-esqueci">
-        <h2 class="login-titulo">Recuperar a conta</h2>
-        <p class="dica">Digite o e-mail da sua conta. Só pelo e-mail dá para
-          recuperar — saber o apelido de alguém não abre nada.</p>
-
-        <label for="esqueci-email">E-mail</label>
-        <input id="esqueci-email" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
-
-        <button id="btn-enviar-recuperacao" class="principal">Enviar link</button>
-        <p class="conectado escondida" id="esqueci-ok"></p>
-        <button id="btn-voltar-login" class="ligacao">Voltar</button>
-      </div>
-
-      <!-- ------------------------------- REDEFINIR (vem do link do e-mail) -->
-      <div class="modo escondida" id="modo-redefinir">
-        <h2 class="login-titulo">Nova senha</h2>
-        <p class="dica">Escolha uma senha nova. Você já entra em seguida.</p>
-
-        <label for="senha-nova">Nova senha</label>
-        <input id="senha-nova" type="password" maxlength="64" placeholder="Pelo menos 6 caracteres" autocomplete="new-password" />
-
-        <button id="btn-salvar-senha" class="principal">Salvar e entrar</button>
-        <button id="btn-voltar-login-2" class="ligacao">Voltar</button>
-      </div>
-
       <p class="aviso" id="aviso-login"></p>
     </div>
   </div>
 
   <!-- TELA 1: entrada -->
   <section class="tela" id="tela-entrada">
+
+    <!-- O ranking vem ANTES do painel no HTML porque ele fica à esquerda na
+         tela. Esta é a tela do menu; durante a partida ele nem aparece. -->
+    <aside class="ranking" id="ranking">
+      <header class="ranking-topo">
+        <h2>🏆 Ranking da semana</h2>
+        <p class="ranking-periodo" id="ranking-periodo"></p>
+      </header>
+      <ol class="ranking-lista" id="ranking-lista"></ol>
+      <p class="ranking-regra">
+        Vitória vale mais em mesa cheia: 5/3/2/1 com 4 jogadores,
+        2/1/0 com 3 e 1/0 com 2. Zera toda segunda-feira.
+      </p>
+    </aside>
+
     <div class="painel">
       <p class="quem">
         <span>Jogando como <strong id="quem-sou">—</strong></span>
         <button id="btn-sair-conta" class="fantasma">sair</button>
       </p>
-
-      <!-- Só aparece enquanto o e-mail não foi confirmado. Não bloqueia o jogo:
-           bloqueia só o ranking, e diz isso. -->
-      <div class="faixa-email escondida" id="faixa-email">
-        <p>Confirme seu e-mail para a sua pontuação valer no ranking.
-          Enviamos um link para <strong id="email-pendente">—</strong>.</p>
-        <div class="faixa-email-acoes">
-          <button id="btn-reenviar" class="secundario">Reenviar e-mail</button>
-          <button id="btn-trocar-email" class="ligacao">Digitei errado</button>
-        </div>
-        <div class="escondida" id="bloco-trocar-email">
-          <input id="email-novo" type="email" maxlength="200" placeholder="seu@email.com" autocomplete="email" />
-          <button id="btn-salvar-email" class="secundario">Salvar e reenviar</button>
-        </div>
-        <p class="aviso" id="aviso-email"></p>
-      </div>
 
       <button id="btn-criar" class="principal">Criar uma sala</button>
 
@@ -129,17 +101,6 @@
       </div>
     </div>
 
-    <!-- Ranking da semana, no canto direito. Fora do caminho da área de jogo:
-         esta tela é o menu, e na mesa ele nem aparece. -->
-    <aside class="ranking" id="ranking">
-      <h2>🏆 Ranking da semana</h2>
-      <p class="ranking-periodo" id="ranking-periodo"></p>
-      <ol class="ranking-lista" id="ranking-lista"></ol>
-      <p class="ranking-regra">
-        Vitória vale mais em mesa cheia: 5/3/2/1 com 4 jogadores,
-        2/1/0 com 3 e 1/0 com 2. Zera toda segunda-feira.
-      </p>
-    </aside>
   </section>
 
   <!-- TELA 2: sala de espera -->

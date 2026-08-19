@@ -50,28 +50,3 @@ services:
       - key: ADMIN_SEGREDO
         sync: false
 
-      # ENVIO DE E-MAIL. Preencha no painel do Render (Environment), nunca
-      # aqui: SMTP_SENHA e um segredo e nao pode entrar no repositorio.
-      #
-      # Sem estas variaveis o servidor nao quebra - ele imprime o e-mail
-      # inteiro, com o link, no proprio log. Mas ai ninguem confirma a conta
-      # sozinho, e sem confirmar a pontuacao nao entra no ranking.
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORTA
-        value: "587"
-      - key: SMTP_USUARIO
-        sync: false
-      - key: SMTP_SENHA
-        sync: false
-
-      # Quem assina os e-mails. Use um endereco do mesmo dominio do SMTP_USUARIO,
-      # senao muitos provedores mandam a mensagem direto para o spam.
-      - key: EMAIL_REMETENTE
-        sync: false
-
-      # O endereco que vai DENTRO dos links do e-mail. Se voce nao definir, o
-      # proprio RENDER_EXTERNAL_URL e usado - que ja e o endereco publico deste
-      # servico.
-      - key: URL_PUBLICA
-        sync: false

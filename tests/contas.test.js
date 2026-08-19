@@ -20,8 +20,6 @@ let contador = 0;
 // ':memory:' isso nao toca em disco nenhum.
 before(() => banco.abrir());
 
-const tokens = require('../server/dados/tokens');
-
 // Uma conta completa: e-mail + apelido + senha.
 const conta = (nome, senha = 'senha1234') => {
   const apelido = `${nome}${++contador}`;
@@ -31,17 +29,6 @@ const conta = (nome, senha = 'senha1234') => {
     senha,
   });
 };
-
-// Uma conta que já confirmou o e-mail - é o que o ranking exige para mostrar
-// alguém. Os testes de ranking usam esta.
-const contaConfirmada = async (nome, senha = 'senha1234') => await confirmar(await conta(nome, senha));
-
-// Confirma o e-mail de uma conta pelo caminho de verdade: cria o token e
-// consome, exatamente como o clique no link faria.
-async function confirmar(usuario) {
-  const token = await tokens.criar(usuario.id, 'verificar');
-  return await usuarios.marcarEmailVerificado(await tokens.consumir(token, 'verificar'));
-}
 
 // Roda a funcao e devolve o erro que ela lancou (ou null).
 async function oQueDeuErrado(acao) {
@@ -64,7 +51,7 @@ test('cria uma conta com e-mail, apelido e senha, e entra com ela', async () => 
   assert.strictEqual(criada.apelido, 'Victor');
   assert.strictEqual(criada.email, 'victor@exemplo.test');
   assert.ok(criada.id, 'a conta precisa de um identificador único');
-  assert.strictEqual(criada.email_verificado_em, null, 'nasce sem confirmar');
+  assert.ok(criada.criado_em, 'e nasce pronta para jogar, sem etapa nenhuma no meio');
 
   assert.strictEqual((await usuarios.entrarComSenha('Victor', 'batatinha')).id, criada.id);
 });
@@ -140,140 +127,57 @@ test('senha errada não entra, e o erro não revela se a conta existe', async ()
 
 test('o que vai para o cliente não leva hash nem sal', async () => {
   const enviado = usuarios.paraOCliente(await conta('Publico'));
-  assert.deepStrictEqual(Object.keys(enviado).sort(), ['email', 'id', 'nome', 'verificado']);
+  assert.deepStrictEqual(Object.keys(enviado).sort(), ['email', 'id', 'nome']);
   assert.ok(!JSON.stringify(enviado).includes('hash'));
 });
 
-// ============================================================ 3. verificação
+// ==================================== 3. senha nova definida pelo administrador
+//
+// A recuperação de conta deste jogo. Não há link por e-mail: o servidor
+// gratuito onde ele roda bloqueia envio. Quem esquece a senha fala com o dono,
+// que define uma nova pelo painel /admin - e é usuarios.definirSenha que faz
+// isso, sem pedir a senha antiga.
 
-test('a conta nasce sem confirmar e o link confirma', async () => {
-  const criada = await conta('Confirmando');
-  assert.strictEqual(usuarios.verificado(criada), false);
-
-  const depois = await confirmar(criada);
-  assert.ok(depois.email_verificado_em, 'ficou com a data da confirmação');
-  assert.strictEqual(usuarios.verificado(depois), true);
-});
-
-test('confirmar duas vezes não quebra nem muda a data', async () => {
-  const criada = await conta('Duas');
-  const primeira = await confirmar(criada);
-  const segunda = await usuarios.marcarEmailVerificado(criada.id);
-  assert.strictEqual(segunda.email_verificado_em, primeira.email_verificado_em);
-});
-
-test('quem digitou o e-mail errado pode corrigir, e volta a não confirmado', async () => {
-  const criada = await conta('Errou');
-  await usuarios.trocarEmail(criada.id, 'certo@exemplo.test');
-  const depois = await usuarios.porId(criada.id);
-  assert.strictEqual(depois.email, 'certo@exemplo.test');
-  assert.strictEqual(depois.email_verificado_em, null);
-
-  // E não dá para roubar o e-mail de outra conta.
-  const outra = await conta('Outra');
-  const erro = await oQueDeuErrado(async () => await usuarios.trocarEmail(criada.id, outra.email));
-  assert.match(erro.message, /Já existe uma conta/);
-});
-
-// ============================================================ 4. tokens
-
-test('o token é de uso único', async () => {
-  const criada = await conta('UsoUnico');
-  const token = await tokens.criar(criada.id, 'recuperar');
-
-  assert.strictEqual(await tokens.consumir(token, 'recuperar'), criada.id);
-  const erro = await oQueDeuErrado(async () => await tokens.consumir(token, 'recuperar'));
-  assert.match(erro.message, /já foi usado/);
-});
-
-test('o token expira', async () => {
-  const criada = await conta('Expirado');
-  const token = await tokens.criar(criada.id, 'recuperar');
-  const depoisDoPrazo = Date.now() + tokens.VALIDADE.recuperar + 1000;
-
-  const erro = await oQueDeuErrado(async () => await tokens.consumir(token, 'recuperar', depoisDoPrazo));
-  assert.match(erro.message, /expirou/);
-});
-
-test('pedir um link novo invalida o anterior', async () => {
-  // Senão cada clique em "esqueci a senha" deixaria mais uma chave válida
-  // circulando pela caixa de entrada.
-  const criada = await conta('Novo');
-  const antigo = await tokens.criar(criada.id, 'recuperar');
-  const recente = await tokens.criar(criada.id, 'recuperar');
-
-  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(antigo, 'recuperar')), 'o antigo morreu');
-  assert.strictEqual(await tokens.consumir(recente, 'recuperar'), criada.id);
-});
-
-test('token de um tipo não serve para o outro', async () => {
-  // Um link de confirmação de e-mail não pode virar um link de trocar senha.
-  const criada = await conta('Tipos');
-  const verificacao = await tokens.criar(criada.id, 'verificar');
-  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(verificacao, 'recuperar')));
-});
-
-test('token inventado não vale', async () => {
-  assert.ok(await oQueDeuErrado(async () => await tokens.consumir('inventei-esse-aqui', 'recuperar')));
-  assert.ok(await oQueDeuErrado(async () => await tokens.consumir('', 'recuperar')));
-  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(null, 'verificar')));
-});
-
-test('o banco guarda o HASH do token, nunca o token', async () => {
-  // Se o banco vazar, os links que estiverem lá dentro não abrem nada.
-  const criada = await conta('Hashado');
-  const token = await tokens.criar(criada.id, 'recuperar');
-  const linhas = await banco.tudo('SELECT * FROM tokens');
-  assert.ok(linhas.length > 0);
-  assert.ok(!linhas.some((l) => l.hash === token), 'o valor original não pode estar no banco');
-});
-
-// ============================================================ 5. recuperação
-
-test('o link do e-mail define a senha nova e já confirma o e-mail', async () => {
+test('o administrador define uma senha nova sem saber a antiga', async () => {
   const criada = await conta('Esquecido', 'velha1234');
-  assert.strictEqual(usuarios.verificado(criada), false);
 
-  const token = await tokens.criar(criada.id, 'recuperar');
-  const depois = await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), 'nova12345');
+  await usuarios.definirSenha(criada.id, 'nova12345');
 
   assert.ok(await usuarios.entrarComSenha(criada.apelido, 'nova12345'), 'a senha nova funciona');
   assert.ok(
-    await oQueDeuErrado(async () => await usuarios.entrarComSenha(criada.apelido, 'velha1234')),
-    'e a antiga deixa de funcionar'
-  );
-  // Quem abriu o link provou que a caixa de entrada é dele - que é justamente
-  // o que a confirmação queria descobrir.
-  assert.ok(depois.email_verificado_em, 'o e-mail fica confirmado de brinde');
-});
-
-test('SABER O APELIDO NÃO RECUPERA NADA', async () => {
-  // O ponto central do desenho: a recuperação começa por um e-mail que só o
-  // dono recebe. Conhecer o apelido - que aparece no ranking para todo mundo -
-  // não dá nenhum passo em direção à conta.
-  const vitima = await conta('Alvo', 'senha1234');
-  const atacante = await conta('Atacante');
-  // O apelido real tem sufixo (Alvo1, Alvo2...) porque os testes rodam em
-  // sequência no mesmo banco.
-
-  // O atacante só consegue gerar token para a conta DELE.
-  const token = await tokens.criar(atacante.id, 'recuperar');
-  const mexeu = await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), 'senha-do-atacante');
-
-  assert.strictEqual(mexeu.id, atacante.id, 'ele só trocou a própria senha');
-  assert.ok(
-    await usuarios.entrarComSenha(vitima.apelido, 'senha1234'),
-    'a senha da vítima continua valendo'
+    await oQueDeuErrado(() => usuarios.entrarComSenha(criada.apelido, 'velha1234')),
+    'e a antiga deixa de funcionar na hora'
   );
 });
 
-test('recuperação também exige senha nova válida', async () => {
+test('a senha definida pelo administrador também precisa ser válida', async () => {
   const criada = await conta('Curta');
-  const token = await tokens.criar(criada.id, 'recuperar');
-  const erro = await oQueDeuErrado(async () =>
-    await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), '123')
-  );
+  const erro = await oQueDeuErrado(() => usuarios.definirSenha(criada.id, '123'));
   assert.match(erro.message, /pelo menos/);
+});
+
+test('definir senha para uma conta que não existe não cria nada', async () => {
+  const erro = await oQueDeuErrado(() => usuarios.definirSenha('id-inventado', 'senha1234'));
+  assert.match(erro.message, /não encontrada/i);
+});
+
+test('a senha nova também é guardada como hash, nunca em texto', async () => {
+  // Vale para o caminho do administrador igual ao do cadastro: nem ele lê senha.
+  const criada = await conta('HashDeNovo');
+  await usuarios.definirSenha(criada.id, 'texto-puro-123');
+
+  const depois = await usuarios.porId(criada.id);
+  assert.notStrictEqual(depois.senha_hash, 'texto-puro-123');
+  assert.ok(!JSON.stringify(depois).includes('texto-puro-123'), 'a senha não pode estar em lugar nenhum');
+});
+
+test('o e-mail continua obrigatório, mesmo sem confirmação por link', async () => {
+  // Ele é como o administrador identifica de quem é cada conta quando alguém
+  // pede uma senha nova.
+  const erro = await oQueDeuErrado(() =>
+    usuarios.criarConta({ email: '', apelido: 'SemEmailAgora', senha: 'senha1234' })
+  );
+  assert.match(erro.message, /e-mail/i);
 });
 
 test('trocar a senha estando logado exige a senha atual', async () => {
@@ -401,9 +305,9 @@ const resultadoCom = (linhas) => ({
 });
 
 test('uma partida vira pontos das pessoas certas', async () => {
-  const ana = await contaConfirmada('Ana');
-  const bento = await contaConfirmada('Bento');
-  const clara = await contaConfirmada('Clara');
+  const ana = await conta('Ana');
+  const bento = await conta('Bento');
+  const clara = await conta('Clara');
 
   const gravado = await ranking.registrarPartida({
     partidaId: 'partida-basica',
@@ -420,8 +324,8 @@ test('uma partida vira pontos das pessoas certas', async () => {
 });
 
 test('a mesma partida nunca conta duas vezes', async () => {
-  const ana = await contaConfirmada('Dupla');
-  const bento = await contaConfirmada('Dupla');
+  const ana = await conta('Dupla');
+  const bento = await conta('Dupla');
   const dados = {
     partidaId: 'partida-repetida',
     resultado: resultadoCom([
@@ -441,9 +345,9 @@ test('a mesma partida nunca conta duas vezes', async () => {
 
 test('o ranking soma várias partidas e ordena por pontos', async () => {
   const semana = ranking.chaveDaSemana();
-  const forte = await contaConfirmada('Forte');
-  const medio = await contaConfirmada('Medio');
-  const fraco = await contaConfirmada('Fraco');
+  const forte = await conta('Forte');
+  const medio = await conta('Medio');
+  const fraco = await conta('Fraco');
 
   for (let i = 0; i < 3; i++) {
     await ranking.registrarPartida({
@@ -472,8 +376,8 @@ test('virar a semana zera o ranking mas não apaga o passado', async () => {
   const chaveNova = ranking.chaveDaSemana(estaSemana);
   assert.notStrictEqual(chaveVelha, chaveNova);
 
-  const veterano = await contaConfirmada('Veterano');
-  const novato = await contaConfirmada('Novato');
+  const veterano = await conta('Veterano');
+  const novato = await conta('Novato');
 
   await ranking.registrarPartida({
     partidaId: 'semana-passada',
@@ -506,8 +410,8 @@ test('partida sem identificação é recusada', async () => {
 // ============================================================ 7. de ponta a ponta
 
 test('uma partida de verdade, do início ao fim, vira pontos', async () => {
-  const ana = await contaConfirmada('PontaA');
-  const bento = await contaConfirmada('PontaB');
+  const ana = await conta('PontaA');
+  const bento = await conta('PontaB');
 
   // O id da conta é o id do jogador dentro do jogo - é isso que amarra a
   // partida à pessoa sem nenhuma tradução no meio.

@@ -12,8 +12,13 @@
 //      minuto" em "alguns".
 //
 // E o que este painel NUNCA devolve: senha_hash e senha_sal. Nem para o
-// administrador. Não há como recuperar a senha de ninguém - ela não está
-// guardada em lugar nenhum (ver server/dados/usuarios.js).
+// administrador. Não há como LER a senha de ninguém - ela não está guardada em
+// lugar nenhum (ver server/dados/usuarios.js).
+//
+// O que ele PODE fazer é DEFINIR uma senha nova para alguém que esqueceu a
+// dela. É a recuperação de conta deste jogo: a pessoa avisa, o administrador
+// define uma senha nova e entrega. Ler e escrever são coisas diferentes, e só a
+// segunda é necessária para resolver o problema de quem esqueceu.
 
 const path = require('path');
 const crypto = require('crypto');
@@ -21,6 +26,7 @@ const express = require('express');
 
 const banco = require('../dados/banco');
 const ranking = require('../dados/ranking');
+const usuarios = require('../dados/usuarios');
 
 const SEGREDO = process.env.ADMIN_SEGREDO || '';
 const ligado = () => Boolean(SEGREDO);
@@ -117,6 +123,79 @@ router.get('/api/admin/dados', sóAdministrador, async (req, res) => {
   } catch (erro) {
     console.error('[admin]', erro);
     res.status(500).json({ ok: false, erro: 'Não foi possível ler os dados.' });
+  }
+});
+
+// ------------------------------------------------------- DEFINIR SENHA NOVA
+//
+// A recuperação de conta deste jogo. Recebe o id da conta e a senha nova.
+//
+// Repare no que NÃO acontece aqui: nada é lido da senha antiga, e a nova não é
+// devolvida na resposta nem guardada em texto - ela vira hash igual a qualquer
+// outra (ver usuarios.definirSenha). O administrador combina a senha com a
+// pessoa por fora; o servidor só registra.
+router.post('/api/admin/senha', sóAdministrador, async (req, res) => {
+  try {
+    const { id, novaSenha } = req.body || {};
+    const conta = await usuarios.porId(id);
+    if (!conta) return res.status(404).json({ ok: false, erro: 'Conta não encontrada.' });
+
+    await usuarios.definirSenha(conta.id, novaSenha);
+    console.log(`[admin] senha redefinida para a conta ${conta.apelido} (${conta.id})`);
+    res.json({ ok: true, nome: conta.apelido });
+  } catch (erro) {
+    const esperado = erro instanceof usuarios.ErroDeConta;
+    if (!esperado) console.error('[admin]', erro);
+    res.status(esperado ? 400 : 500).json({
+      ok: false,
+      erro: esperado ? erro.message : 'Não foi possível trocar a senha.',
+    });
+  }
+});
+
+// ------------------------------------------------------------- EXPORTAR CSV
+//
+// Baixa as contas num arquivo que o Excel e o Google Sheets abrem com dois
+// cliques. É a cópia dos dados na mão do dono do jogo - a garantia de que nada
+// se perde não depende de nenhuma empresa continuar existindo.
+//
+// A senha não vai junto, pelo mesmo motivo de sempre: uma planilha é um arquivo
+// que se compartilha por link sem querer.
+const paraCsv = (valor) => {
+  const texto = valor === null || valor === undefined ? '' : String(valor);
+  return /[",;\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+};
+
+const dataLegivel = (t) =>
+  t ? new Date(t).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+
+router.get('/api/admin/contas.csv', sóAdministrador, async (_req, res) => {
+  try {
+    const contas = await banco.tudo(
+      `SELECT u.apelido, u.email, u.criado_em, u.visto_em,
+              (SELECT COUNT(*) FROM resultados r WHERE r.usuario_id = u.id) AS partidas,
+              (SELECT COALESCE(SUM(r.pontos), 0) FROM resultados r WHERE r.usuario_id = u.id) AS pontos
+         FROM usuarios u
+        ORDER BY u.criado_em DESC`
+    );
+
+    // Ponto e vírgula: é o separador que o Excel em português entende sozinho.
+    // O \uFEFF na frente faz os acentos aparecerem certos ao abrir no Excel.
+    const linhas = [['apelido', 'email', 'criada em', 'último acesso', 'partidas', 'pontos'].join(';')];
+    for (const c of contas) {
+      linhas.push(
+        [c.apelido, c.email, dataLegivel(c.criado_em), dataLegivel(c.visto_em), c.partidas, c.pontos]
+          .map(paraCsv)
+          .join(';')
+      );
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="contas-barbestial.csv"');
+    res.send('\uFEFF' + linhas.join('\n'));
+  } catch (erro) {
+    console.error('[admin]', erro);
+    res.status(500).json({ ok: false, erro: 'Não foi possível exportar.' });
   }
 });
 
