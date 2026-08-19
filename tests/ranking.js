@@ -376,9 +376,14 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
       const img = document.getElementById('vitrine-arte');
       const palco = document.querySelector('.vitrine-palco').getBoundingClientRect();
       const arte = img.getBoundingClientRect();
+      const centro = document.querySelector('.centro');
       return {
         rolagemDaPagina: document.documentElement.scrollHeight - innerHeight,
         rolagemDoMenu: menu.scrollHeight - menu.clientHeight,
+        // Barra de rolagem no bloco central estraga o visual da tela principal:
+        // ele aperta o conteúdo em janelas baixas em vez de rolar.
+        barraNoCentro: centro.scrollHeight - centro.clientHeight,
+        centroCabe: centro.getBoundingClientRect().bottom <= menu.getBoundingClientRect().bottom + 1,
         carteiraCortada: arte.height > palco.height + 1 || arte.width > palco.width + 1,
         proporcaoIntacta: img.naturalWidth
           ? Math.abs(arte.width / arte.height - img.naturalWidth / img.naturalHeight) < 0.05
@@ -388,6 +393,8 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
     });
     check(m.rolagemDaPagina <= 0, `${tela.nome} (${tela.w}x${tela.h}): a página não rola`);
     check(m.rolagemDoMenu <= 0, `${tela.nome}: o menu inteiro cabe na tela`);
+    check(m.barraNoCentro <= 0, `${tela.nome}: sem barra de rolagem no bloco central`);
+    check(m.centroCabe, `${tela.nome}: e o bloco central inteiro aparece`);
     check(!m.carteiraCortada, `${tela.nome}: a carta aparece inteira (${m.arte})`);
     check(m.proporcaoIntacta, `${tela.nome}: sem esticar nem achatar a arte`);
   }

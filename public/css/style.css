@@ -1142,9 +1142,13 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    as duas com a mesma largura, alinhadas uma com a outra. */
 .centro {
   grid-column: 2; grid-row: 1; align-self: start;
-  width: min(420px, 100%); max-height: 100%;
+  width: min(420px, 100%);
   display: flex; flex-direction: column; gap: 1rem;
-  min-height: 0; overflow-y: auto;
+  min-height: 0;
+  /* SEM BARRA DE ROLAGEM AQUI. Ela aparecia em janelas mais baixas e estragava
+     o visual do bloco principal. Em vez de rolar, o conteúdo aperta: as regras
+     de janela baixa abaixo cuidam disso. */
+  overflow: visible;
 }
 #tela-entrada .painel { width: 100%; margin: 0; }
 
@@ -1319,7 +1323,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    a lado. A ordem é a do jogo primeiro: menu, ranking, e depois o resto. */
 /* JANELAS BAIXAS (notebook de tela pequena, navegador com muita barra aberta).
    Tudo aperta um pouco em vez de estourar para fora da tela. */
-@media (max-height: 780px) {
+@media (max-height: 900px) {
   #tela-entrada { gap: 1rem; padding-top: .5rem; }
   .painel { padding: 1.1rem 1.2rem; }
   .centro { gap: .7rem; }
@@ -1331,6 +1335,17 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   .estat strong { font-size: 1.1rem; }
   .estat-recado { margin-top: .55rem; }
   .ranking { padding: 1rem 1.1rem; }
+}
+
+/* Mais baixa ainda: o painel do meio perde o resto da gordura. */
+@media (max-height: 730px) {
+  #tela-entrada { gap: .8rem; }
+  .painel { padding: .9rem 1.1rem; }
+  .centro { gap: .55rem; }
+  .quem { margin-bottom: .7rem; padding-bottom: .5rem; }
+  .separador { margin: .7rem 0; }
+  .opcoes { margin-top: .45rem; }
+  .estat-recado { margin-top: .45rem; font-size: .7rem; }
 }
 
 /* Telas estreitas: as três colunas viram uma só. Aqui a rolagem volta a ser
