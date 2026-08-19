@@ -8,7 +8,9 @@ configurar nada. As variáveis existem para produção.
 | Variável | Para que serve | Padrão |
 |---|---|---|
 | `PORT` | Porta do servidor | `3001` |
-| `BANCO_CAMINHO` | Onde fica o arquivo do SQLite | `data/barbestial.db` |
+| `TURSO_URL` | Endereço do banco no Turso (`libsql://...`) | vazio (usa arquivo local) |
+| `TURSO_TOKEN` | Token de acesso ao banco do Turso | vazio |
+| `BANCO_CAMINHO` | Arquivo local, quando não há Turso | `data/barbestial.db` |
 | `SESSAO_SEGREDO` | Chave que assina os crachás de sessão | sorteada a cada boot |
 | `FUSO_MINUTOS` | Fuso usado para decidir quando a semana vira | `-180` (Brasília) |
 | `LIMITE_TURNO_MS` | Tempo de cada turno | `35000` |
@@ -21,11 +23,11 @@ configurar nada. As variáveis existem para produção.
 
 Três delas merecem atenção em produção:
 
-**`BANCO_CAMINHO`** precisa apontar para um lugar que sobreviva a reinícios. No
-Render isso significa um disco montado (ver `render.yaml`). Sem disco, o arquivo
-vive no sistema de arquivos temporário do container: funciona enquanto o
-servidor está de pé e some no próximo deploy, levando junto as contas e o
-ranking.
+**`TURSO_URL`** é a variável mais importante do projeto. Sem ela o servidor
+grava num arquivo local — e o disco do Render é descartável: some a cada deploy,
+a cada reinício e a cada 15 minutos de hibernação, levando junto todas as contas
+e o ranking. Com ela, o banco fica fora do servidor e os dados sobrevivem a
+tudo isso. Veja "Ligando o banco no Turso" abaixo.
 
 **`SESSAO_SEGREDO`** precisa ser fixa. Sem ela, o servidor sorteia uma chave
 nova a cada boot e todo mundo é deslogado a cada deploy. No Render, o
@@ -104,6 +106,48 @@ quem lesse o banco não conseguiria usar um link. Além disso:
 
 E um limite de **um e-mail por minuto por endereço**, para o "esqueci a senha"
 não virar um jeito de bombardear a caixa de entrada de outra pessoa.
+
+## Ligando o banco no Turso
+
+O Turso é SQLite hospedado: o mesmo banco que o jogo sempre usou, só que fora do
+servidor. Plano gratuito sem prazo de validade, 5 GB, e — o que importa aqui —
+**os dados não somem quando o Render reinicia**.
+
+1. Crie a conta em [turso.tech](https://turso.tech) e um banco novo (região dos
+   Estados Unidos é a mais perto do Render).
+2. Copie as duas informações que o painel mostra: a **URL** (começa com
+   `libsql://`) e um **token de acesso**.
+3. No Render, em **Environment**, crie:
+
+```
+TURSO_URL=libsql://seu-banco-seu-usuario.turso.io
+TURSO_TOKEN=<o token>
+```
+
+O token é um segredo — ele vale como senha do banco. Nunca coloque no
+repositório, em print ou em conversa: cole direto no painel do Render.
+
+Para desenvolver na sua máquina você não precisa de nada disso: sem `TURSO_URL`,
+o servidor cria `data/barbestial.db` ali mesmo e funciona igual.
+
+### Como ver os dados
+
+Três caminhos, do mais simples ao mais direto:
+
+- o painel `/admin` do próprio jogo (ver abaixo);
+- `npm run contas`, que imprime contas e ranking no terminal;
+- o painel do Turso, que tem um editor de SQL no navegador.
+
+### Backup
+
+O banco inteiro cabe num arquivo. Com a CLI do Turso:
+
+```
+turso db shell seu-banco .dump > backup.sql
+```
+
+Guarde esse arquivo de vez em quando. É o que torna a promessa de "os dados não
+se perdem" independente de qualquer empresa.
 
 ## Migrações
 

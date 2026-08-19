@@ -19,7 +19,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 
-const { abrir } = require('../dados/banco');
+const banco = require('../dados/banco');
 const ranking = require('../dados/ranking');
 
 const SEGREDO = process.env.ADMIN_SEGREDO || '';
@@ -74,23 +74,20 @@ function sóAdministrador(req, res, proximo) {
 // depois, pela rota protegida abaixo.
 router.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
-router.get('/api/admin/dados', sóAdministrador, (req, res) => {
-  const banco = abrir();
-  const semana = req.query.semana ? String(req.query.semana) : ranking.chaveDaSemana();
+router.get('/api/admin/dados', sóAdministrador, async (req, res) => {
+  try {
+    const semana = req.query.semana ? String(req.query.semana) : ranking.chaveDaSemana();
 
-  // Repare nas colunas: nem senha_hash nem senha_sal aparecem na consulta.
-  const contas = banco
-    .prepare(
+    // Repare nas colunas: nem senha_hash nem senha_sal aparecem na consulta.
+    const contas = await banco.tudo(
       `SELECT u.id, u.apelido AS nome, u.email, u.email_verificado_em, u.criado_em, u.visto_em, u.senha_trocada_em,
               (SELECT COUNT(*) FROM resultados r WHERE r.usuario_id = u.id) AS partidas,
               (SELECT COALESCE(SUM(r.pontos), 0) FROM resultados r WHERE r.usuario_id = u.id) AS pontosTotais
          FROM usuarios u
         ORDER BY u.criado_em DESC`
-    )
-    .all();
+    );
 
-  const partidas = banco
-    .prepare(
+    const partidas = await banco.tudo(
       `SELECT p.id, p.sala, p.terminou_em, p.semana, p.jogadores,
               (SELECT GROUP_CONCAT(u.apelido || ' (' || r.posicao || 'º, ' || r.pontos || 'pt)', ', ')
                  FROM resultados r JOIN usuarios u ON u.id = r.usuario_id
@@ -99,23 +96,28 @@ router.get('/api/admin/dados', sóAdministrador, (req, res) => {
          FROM partidas p
         ORDER BY p.terminou_em DESC
         LIMIT 30`
-    )
-    .all();
+    );
 
-  res.json({
-    ok: true,
-    agora: Date.now(),
-    semana: ranking.semanaAtual(),
-    semanaConsultada: semana,
-    contas,
-    ranking: ranking.rankingDaSemana(semana),
-    partidas,
-    totais: {
-      contas: contas.length,
-      partidas: banco.prepare('SELECT COUNT(*) AS n FROM partidas').get().n,
-      semanas: ranking.semanasComPartidas(),
-    },
-  });
+    const totalDePartidas = await banco.um('SELECT COUNT(*) AS n FROM partidas');
+
+    res.json({
+      ok: true,
+      agora: Date.now(),
+      semana: ranking.semanaAtual(),
+      semanaConsultada: semana,
+      contas,
+      ranking: await ranking.rankingDaSemana(semana),
+      partidas,
+      totais: {
+        contas: contas.length,
+        partidas: totalDePartidas.n,
+        semanas: await ranking.semanasComPartidas(),
+      },
+    });
+  } catch (erro) {
+    console.error('[admin]', erro);
+    res.status(500).json({ ok: false, erro: 'Não foi possível ler os dados.' });
+  }
 });
 
 module.exports = { router, ligado };

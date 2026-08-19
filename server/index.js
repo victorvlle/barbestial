@@ -25,9 +25,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Abre (e cria, na primeira vez) o banco antes de aceitar qualquer pedido.
-// Falhar aqui e melhor do que falhar no meio de uma partida.
-abrir();
+// O banco e aberto (e migrado) ANTES de o servidor comecar a ouvir - ver o fim
+// deste arquivo. Falhar ali e melhor do que falhar no meio de uma partida.
 
 app.use(express.json({ limit: '16kb' })); // corpo das rotas de conta
 
@@ -60,12 +59,19 @@ app.get('/saude', (_req, res) => res.json({ ok: true, salas: salasAtivas() }));
 // ele mesmo tinha inventado; agora quem diz quem voce e e a assinatura da
 // sessao. Um jogador nao consegue mais se passar por outro nem jogar a carta
 // de quem esta do lado, mesmo forjando eventos pelo console.
-io.use((socket, next) => {
-  const token = socket.handshake.auth && socket.handshake.auth.token;
-  const usuario = lerSessao(token);
-  if (!usuario) return next(new Error('nao-autenticado'));
-  socket.data.usuario = paraOCliente(usuario);
-  next();
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth && socket.handshake.auth.token;
+    const usuario = await lerSessao(token);
+    if (!usuario) return next(new Error('nao-autenticado'));
+    socket.data.usuario = paraOCliente(usuario);
+    next();
+  } catch (erro) {
+    // Banco fora do ar na hora de conectar: recusa como qualquer nao-autenticado,
+    // mas deixa registrado o motivo de verdade no log.
+    console.error('[socket] não consegui conferir a sessão:', erro.message);
+    next(new Error('nao-autenticado'));
+  }
 });
 
 io.on('connection', (socket) => {
@@ -86,7 +92,15 @@ server.on('error', (erro) => {
   throw erro;
 });
 
-server.listen(PORT, () => {
-  const onde = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  console.log(`\n  Bar Bestial rodando em ${onde}\n`);
-});
+abrir()
+  .then(() => {
+    server.listen(PORT, () => {
+      const onde = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+      console.log(`\n  Bar Bestial rodando em ${onde}\n`);
+    });
+  })
+  .catch((erro) => {
+    console.error('\n  Não consegui abrir o banco de dados:', erro.message);
+    console.error('  Confira TURSO_URL e TURSO_TOKEN (ou BANCO_CAMINHO, no ambiente local).\n');
+    process.exit(1);
+  });

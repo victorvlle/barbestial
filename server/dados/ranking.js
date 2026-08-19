@@ -4,7 +4,7 @@
 // Este arquivo nao conhece Socket.IO nem Express. Ele recebe o resultado que o
 // motor do jogo ja calculou e guarda. Da para testar tudo aqui sem subir servidor.
 
-const { abrir } = require('./banco');
+const banco = require('./banco');
 
 // ============================================================================
 // 1. A SEMANA
@@ -138,57 +138,56 @@ function posicionar(tabela) {
 // terminando ao mesmo tempo, uma reconexao, um clique repetido), o INSERT OR
 // IGNORE nao faz nada e devolvemos { novo: false }.
 
-function registrarPartida({ partidaId, sala, resultado, quando = Date.now() }) {
+async function registrarPartida({ partidaId, sala, resultado, quando = Date.now() }) {
   if (!partidaId || !resultado || !Array.isArray(resultado.tabela)) {
     throw new Error('Partida sem identificação ou sem resultado.');
   }
 
-  const banco = abrir();
   const semana = chaveDaSemana(quando);
   const classificados = posicionar(resultado.tabela);
   const total = classificados.length;
 
   // Uma transacao so: ou a partida inteira entra, ou nada entra.
-  const gravar = banco.transaction(() => {
-    const partida = banco
-      .prepare(
-        `INSERT OR IGNORE INTO partidas (id, sala, terminou_em, semana, jogadores)
-         VALUES (?, ?, ?, ?, ?)`
-      )
-      .run(partidaId, sala || null, quando, semana, total);
+  const linhas = await banco.transacao(async (tx) => {
+    const partida = await tx.execute({
+      sql: `INSERT OR IGNORE INTO partidas (id, sala, terminou_em, semana, jogadores)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: [partidaId, sala || null, quando, semana, total],
+    });
 
-    if (partida.changes === 0) return null; // ja tinha sido registrada
+    if (partida.rowsAffected === 0) return null; // ja tinha sido registrada
 
-    const inserirResultado = banco.prepare(
-      `INSERT OR IGNORE INTO resultados
-         (partida_id, usuario_id, posicao, animais, soma_forcas, pontos, semana, criado_em)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    const linhas = [];
+    const gravadas = [];
     for (const jogador of classificados) {
       // Uma conta que nao existe mais no banco (apagada) nao pode virar linha:
       // a chave estrangeira recusaria e derrubaria a transacao inteira.
-      const existe = banco.prepare('SELECT 1 FROM usuarios WHERE id = ?').get(jogador.id);
-      if (!existe) continue;
+      const existe = await tx.execute({
+        sql: 'SELECT 1 FROM usuarios WHERE id = ?',
+        args: [jogador.id],
+      });
+      if (!existe.rows.length) continue;
 
       const pontos = pontosDaPosicao(jogador.posicao, total);
-      inserirResultado.run(
-        partidaId,
-        jogador.id,
-        jogador.posicao,
-        jogador.entraram,
-        jogador.somaForcas,
-        pontos,
-        semana,
-        quando
-      );
-      linhas.push({ ...jogador, pontos });
+      await tx.execute({
+        sql: `INSERT OR IGNORE INTO resultados
+                (partida_id, usuario_id, posicao, animais, soma_forcas, pontos, semana, criado_em)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          partidaId,
+          jogador.id,
+          jogador.posicao,
+          jogador.entraram,
+          jogador.somaForcas,
+          pontos,
+          semana,
+          quando,
+        ],
+      });
+      gravadas.push({ ...jogador, pontos });
     }
-    return linhas;
+    return gravadas;
   });
 
-  const linhas = gravar();
   return linhas ? { novo: true, semana, jogadores: linhas } : { novo: false, semana };
 }
 
@@ -198,10 +197,9 @@ function registrarPartida({ partidaId, sala, resultado, quando = Date.now() }) {
 
 // O ranking de uma semana. Ordem: mais pontos; empate em pontos vai para quem
 // jogou menos partidas (aproveitou melhor cada uma); persistindo, ordem alfabetica.
-function rankingDaSemana(chave = chaveDaSemana(), limite = 100) {
-  return abrir()
-    .prepare(
-      `SELECT u.id, u.apelido AS nome,
+async function rankingDaSemana(chave = chaveDaSemana(), limite = 100) {
+  const linhas = await banco.tudo(
+    `SELECT u.id, u.apelido AS nome,
               SUM(r.pontos)  AS pontos,
               COUNT(*)       AS partidas,
               SUM(CASE WHEN r.posicao = 1 THEN 1 ELSE 0 END) AS vitorias
@@ -218,29 +216,28 @@ function rankingDaSemana(chave = chaveDaSemana(), limite = 100) {
           AND u.email_verificado_em IS NOT NULL
         GROUP BY u.id, u.apelido
         ORDER BY pontos DESC, partidas ASC, u.apelido COLLATE NOCASE ASC
-        LIMIT ?`
-    )
-    .all(chave, limite)
-    .map((linha, indice) => ({ ...linha, posicao: indice + 1 }));
+        LIMIT ?`,
+    [chave, limite]
+  );
+  return linhas.map((linha, indice) => ({ ...linha, posicao: indice + 1 }));
 }
 
 // Todas as semanas que ja tiveram partida, da mais recente para a mais antiga.
 // Hoje a tela so mostra a semana atual, mas o historico ja esta aqui.
 const semanasComPartidas = () =>
-  abrir()
-    .prepare('SELECT semana, COUNT(*) AS partidas FROM partidas GROUP BY semana ORDER BY semana DESC')
-    .all();
+  banco.tudo(
+    'SELECT semana, COUNT(*) AS partidas FROM partidas GROUP BY semana ORDER BY semana DESC'
+  );
 
 // As ultimas partidas de um jogador - materia-prima para uma futura tela de perfil.
 const partidasDoUsuario = (usuarioId, limite = 20) =>
-  abrir()
-    .prepare(
-      `SELECT r.*, p.terminou_em, p.jogadores
-         FROM resultados r JOIN partidas p ON p.id = r.partida_id
-        WHERE r.usuario_id = ?
-        ORDER BY p.terminou_em DESC LIMIT ?`
-    )
-    .all(usuarioId, limite);
+  banco.tudo(
+    `SELECT r.*, p.terminou_em, p.jogadores
+       FROM resultados r JOIN partidas p ON p.id = r.partida_id
+      WHERE r.usuario_id = ?
+      ORDER BY p.terminou_em DESC LIMIT ?`,
+    [usuarioId, limite]
+  );
 
 module.exports = {
   TABELAS_DE_PONTOS,

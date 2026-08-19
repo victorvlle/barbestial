@@ -16,13 +16,16 @@
 // primeiro passo para roubar uma conta. Quem nao tem acesso a caixa de entrada
 // nao tem por onde comecar.
 //
+// TUDO AQUI E ASSINCRONO desde que o banco saiu para a nuvem (ver banco.js):
+// toda funcao que toca no banco devolve uma promessa e precisa de `await`.
+//
 // SESSAO: um texto de tres partes, "usuarioId.expiraEm.assinatura", assinado
 // com HMAC-SHA256. O servidor nao guarda sessao nenhuma - ele so confere a
 // assinatura. Sem a chave secreta ninguem forja um token, e mudar qualquer
 // letra do id ou da validade invalida a assinatura.
 
 const crypto = require('crypto');
-const { abrir } = require('./banco');
+const banco = require('./banco');
 
 const DURACAO_DA_SESSAO_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
@@ -69,7 +72,7 @@ function criarSessao(usuarioId, agora = Date.now()) {
 }
 
 // Devolve o usuario ou null. Nunca lanca: um token estragado e apenas "nao logado".
-function lerSessao(token, agora = Date.now()) {
+async function lerSessao(token, agora = Date.now()) {
   if (typeof token !== 'string') return null;
   const partes = token.split('.');
   if (partes.length !== 3) return null;
@@ -120,14 +123,13 @@ function validarEmail(email) {
 
 // ------------------------------------------------------------------ buscas
 
-const porId = (id) => abrir().prepare('SELECT * FROM usuarios WHERE id = ?').get(id) || null;
+const porId = (id) => banco.um('SELECT * FROM usuarios WHERE id = ?', [String(id || '')]);
 
 const porApelido = (apelido) =>
-  abrir().prepare('SELECT * FROM usuarios WHERE apelido_chave = ?').get(chaveDoApelido(apelido)) ||
-  null;
+  banco.um('SELECT * FROM usuarios WHERE apelido_chave = ?', [chaveDoApelido(apelido)]);
 
 const porEmail = (email) =>
-  abrir().prepare('SELECT * FROM usuarios WHERE email_chave = ?').get(chaveDoEmail(email)) || null;
+  banco.um('SELECT * FROM usuarios WHERE email_chave = ?', [chaveDoEmail(email)]);
 
 // Entrar aceita o apelido OU o e-mail. Sao duas coisas que a pessoa sabe de cor,
 // e obrigar a lembrar qual das duas e o login seria atrito a toa.
@@ -135,48 +137,47 @@ const porLogin = (texto) =>
   String(texto || '').includes('@') ? porEmail(texto) : porApelido(texto);
 
 const marcarVisto = (id) =>
-  abrir().prepare('UPDATE usuarios SET visto_em = ? WHERE id = ?').run(Date.now(), id);
+  banco.rodar('UPDATE usuarios SET visto_em = ? WHERE id = ?', [Date.now(), id]);
 
 const verificado = (usuario) => Boolean(usuario && usuario.email_verificado_em);
 
 // ------------------------------------------------------------------ cadastro
 
-function criarConta({ email, apelido, senha }) {
+async function criarConta({ email, apelido, senha }) {
   const enderecoLimpo = validarEmail(email);
   const nome = validarApelido(apelido);
   validarSenha(senha);
 
-  if (porApelido(nome)) throw new ErroDeConta('Esse apelido já está em uso. Escolha outro.');
-  if (porEmail(enderecoLimpo)) {
-    throw new ErroDeConta('Já existe uma conta com esse e-mail. Tente entrar ou recuperar a senha.');
+  if (await porApelido(nome)) throw new ErroDeConta('Esse apelido já está em uso. Escolha outro.');
+  if (await porEmail(enderecoLimpo)) {
+    throw new ErroDeConta('Já existe uma conta com esse e-mail. Tente entrar com ele.');
   }
 
   const agora = Date.now();
   const id = crypto.randomUUID();
   const { hash, sal } = embaralharSenha(senha);
 
-  abrir()
-    .prepare(
-      `INSERT INTO usuarios
-         (id, apelido, apelido_chave, email, email_chave, senha_hash, senha_sal, criado_em, visto_em)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(id, nome, chaveDoApelido(nome), enderecoLimpo, chaveDoEmail(enderecoLimpo), hash, sal, agora, agora);
+  await banco.rodar(
+    `INSERT INTO usuarios
+       (id, apelido, apelido_chave, email, email_chave, senha_hash, senha_sal, criado_em, visto_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, nome, chaveDoApelido(nome), enderecoLimpo, chaveDoEmail(enderecoLimpo), hash, sal, agora, agora]
+  );
 
   return porId(id);
 }
 
 // ------------------------------------------------------------------ entrada
 
-function entrarComSenha(login, senha) {
+async function entrarComSenha(login, senha) {
   // Mesma mensagem para "conta nao existe", "senha errada" e "conta sem senha":
   // dizer qual dos tres errou entregaria quais apelidos e e-mails existem.
   const generico = 'Apelido, e-mail ou senha incorretos.';
-  const usuario = porLogin(login);
+  const usuario = await porLogin(login);
   if (!usuario) throw new ErroDeConta(generico);
   if (!usuario.senha_hash) throw new ErroDeConta(generico);
   if (!senhaConfere(senha, usuario.senha_hash, usuario.senha_sal)) throw new ErroDeConta(generico);
-  marcarVisto(usuario.id);
+  await marcarVisto(usuario.id);
   return usuario;
 }
 
@@ -184,32 +185,33 @@ function entrarComSenha(login, senha) {
 
 // Chamado quando o link do e-mail e aberto. O token ja foi conferido em
 // dados/tokens.js; aqui so carimbamos a data.
-function marcarEmailVerificado(usuarioId, agora = Date.now()) {
-  const usuario = porId(usuarioId);
+async function marcarEmailVerificado(usuarioId, agora = Date.now()) {
+  const usuario = await porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
   // Confirmar duas vezes nao e erro - o segundo clique no mesmo link e um
   // acidente comum, e ja tinha dado certo.
   if (!usuario.email_verificado_em) {
-    abrir().prepare('UPDATE usuarios SET email_verificado_em = ? WHERE id = ?').run(agora, usuarioId);
+    await banco.rodar('UPDATE usuarios SET email_verificado_em = ? WHERE id = ?', [agora, usuarioId]);
   }
   return porId(usuarioId);
 }
 
 // Trocar o e-mail antes de confirmar: quem digitou errado precisa de saida.
 // O novo endereco entra como NAO confirmado, obviamente.
-function trocarEmail(usuarioId, novoEmail) {
+async function trocarEmail(usuarioId, novoEmail) {
   const limpo = validarEmail(novoEmail);
-  const usuario = porId(usuarioId);
+  const usuario = await porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
 
-  const dono = porEmail(limpo);
+  const dono = await porEmail(limpo);
   if (dono && dono.id !== usuario.id) {
     throw new ErroDeConta('Já existe uma conta com esse e-mail.');
   }
 
-  abrir()
-    .prepare('UPDATE usuarios SET email = ?, email_chave = ?, email_verificado_em = NULL WHERE id = ?')
-    .run(limpo, chaveDoEmail(limpo), usuarioId);
+  await banco.rodar(
+    'UPDATE usuarios SET email = ?, email_chave = ?, email_verificado_em = NULL WHERE id = ?',
+    [limpo, chaveDoEmail(limpo), usuarioId]
+  );
   return porId(usuarioId);
 }
 
@@ -221,26 +223,25 @@ function trocarEmail(usuarioId, novoEmail) {
 //
 // Confirmar o e-mail junto e de proposito: quem abriu o link provou que a caixa
 // de entrada e dele, que e exatamente o que a verificacao queria descobrir.
-function definirSenhaPorToken(usuarioId, novaSenha, agora = Date.now()) {
+async function definirSenhaPorToken(usuarioId, novaSenha, agora = Date.now()) {
   validarSenha(novaSenha);
-  const usuario = porId(usuarioId);
+  const usuario = await porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
 
   const { hash, sal } = embaralharSenha(novaSenha);
-  abrir()
-    .prepare(
-      `UPDATE usuarios
-          SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?, visto_em = ?,
-              email_verificado_em = COALESCE(email_verificado_em, ?)
-        WHERE id = ?`
-    )
-    .run(hash, sal, agora, agora, agora, usuarioId);
+  await banco.rodar(
+    `UPDATE usuarios
+        SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ?, visto_em = ?,
+            email_verificado_em = COALESCE(email_verificado_em, ?)
+      WHERE id = ?`,
+    [hash, sal, agora, agora, agora, usuarioId]
+  );
   return porId(usuarioId);
 }
 
 // Trocar a senha estando logado: aqui a prova e a senha atual.
-function trocarSenha(usuarioId, senhaAtual, novaSenha) {
-  const usuario = porId(usuarioId);
+async function trocarSenha(usuarioId, senhaAtual, novaSenha) {
+  const usuario = await porId(usuarioId);
   if (!usuario) throw new ErroDeConta('Conta não encontrada.');
   if (usuario.senha_hash && !senhaConfere(senhaAtual, usuario.senha_hash, usuario.senha_sal)) {
     throw new ErroDeConta('Senha atual incorreta.');
@@ -248,9 +249,10 @@ function trocarSenha(usuarioId, senhaAtual, novaSenha) {
   validarSenha(novaSenha);
 
   const { hash, sal } = embaralharSenha(novaSenha);
-  abrir()
-    .prepare('UPDATE usuarios SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ? WHERE id = ?')
-    .run(hash, sal, Date.now(), usuarioId);
+  await banco.rodar(
+    'UPDATE usuarios SET senha_hash = ?, senha_sal = ?, senha_trocada_em = ? WHERE id = ?',
+    [hash, sal, Date.now(), usuarioId]
+  );
   return porId(usuarioId);
 }
 

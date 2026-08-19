@@ -1,21 +1,33 @@
 // A unica porta de entrada para o banco de dados.
 //
-// POR QUE SQLITE: o jogo ja e um servidor Node de um processo so. SQLite e um
-// arquivo do lado do servidor - sem outro servico para subir, sem senha de
-// banco, sem rede no meio. Continua sendo "banco de verdade": transacoes,
-// chaves estrangeiras e consultas com GROUP BY, que e o que o ranking precisa.
+// POR QUE SQLITE (ainda): o jogo e um servidor Node de um processo so. SQLite
+// da transacoes, chaves estrangeiras e GROUP BY - que e tudo o que o ranking
+// precisa - sem nada de exotico. O que mudou foi ONDE o arquivo mora.
 //
-// POR QUE TUDO PASSA POR AQUI: nenhum outro arquivo faz `require('better-sqlite3')`.
-// Se um dia o ranking crescer a ponto de pedir Postgres, e este arquivo que
-// muda - usuarios.js e ranking.js continuam iguais.
+// POR QUE O BANCO SAIU DE DENTRO DO SERVIDOR: no plano gratuito do Render o
+// disco e descartavel. Ele e apagado a cada deploy, a cada reinicio e a cada
+// 15 minutos de hibernacao. Um arquivo local ali significa perder todas as
+// contas o tempo todo. Agora o banco fica no Turso (SQLite hospedado): o
+// servidor pode ser reiniciado, redeployado ou hibernar - os dados ficam.
 //
-// ONDE O ARQUIVO FICA: por padrao em data/barbestial.db, ao lado do codigo.
-// Em producao o caminho vem de BANCO_CAMINHO, apontando para um disco que
-// sobrevive a reinicios (ver render.yaml).
+// COMO ELE ESCOLHE ONDE SE CONECTAR, nesta ordem:
+//   1. TURSO_URL (+ TURSO_TOKEN) -> o banco de verdade, na nuvem
+//   2. BANCO_CAMINHO             -> um arquivo local, para desenvolver
+//   3. data/barbestial.db        -> o padrao, se nada for dito
+// Nos testes, BANCO_CAMINHO=':memory:' deixa tudo na memoria.
+//
+// POR QUE TUDO PASSA POR AQUI: nenhum outro arquivo conhece o cliente do
+// banco. usuarios.js e ranking.js falam com as quatro funcoes daqui embaixo
+// (um / tudo / rodar / varios). Se um dia o banco mudar de novo, muda so este
+// arquivo.
+//
+// TUDO E ASSINCRONO. O banco agora esta do outro lado da rede, entao toda
+// consulta devolve uma promessa. E por isso que as funcoes de usuarios.js e
+// ranking.js viraram `async` - nao e enfeite.
 
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+const { createClient } = require('@libsql/client');
 
 const CAMINHO_PADRAO = path.join(__dirname, '..', '..', 'data', 'barbestial.db');
 
@@ -25,19 +37,86 @@ const VERSAO_ATUAL = 3;
 
 let db = null;
 
-// ':memory:' existe para os testes: banco descartavel, sem tocar em disco.
-function abrir(caminho = process.env.BANCO_CAMINHO || CAMINHO_PADRAO) {
+// Monta a configuracao de conexao a partir do ambiente.
+function enderecoDoBanco() {
+  const remoto = (process.env.TURSO_URL || '').trim();
+  if (remoto) {
+    return { url: remoto, authToken: (process.env.TURSO_TOKEN || '').trim() || undefined };
+  }
+
+  const caminho = process.env.BANCO_CAMINHO || CAMINHO_PADRAO;
+
+  // BANCO EM MEMORIA (so nos testes). O ':memory:' cru NAO SERVE aqui, e o
+  // motivo e sutil: uma transacao abre uma segunda conexao, e cada conexao
+  // ':memory:' recebe um banco privado e VAZIO. O resultado e o banco inteiro
+  // desaparecer no meio da suite ("no such table: usuarios"). Com
+  // 'cache=shared' todas as conexoes do processo enxergam o mesmo banco.
+  if (caminho === ':memory:') return { url: 'file::memory:?cache=shared' };
+
+  fs.mkdirSync(path.dirname(caminho), { recursive: true });
+  return { url: `file:${caminho}` };
+}
+
+// Abre a conexao e deixa o banco na versao atual. Chamada uma vez, na subida do
+// servidor: falhar aqui e melhor do que falhar no meio de uma partida.
+async function abrir(config = enderecoDoBanco()) {
   if (db) return db;
+  db = createClient(config);
 
-  if (caminho !== ':memory:') fs.mkdirSync(path.dirname(caminho), { recursive: true });
-  db = new Database(caminho);
+  // Chave estrangeira e o que faz apagar uma conta levar junto os tokens dela.
+  await db.execute('PRAGMA foreign_keys = ON');
 
-  // WAL: leituras (o ranking) nao ficam esperando escritas (o fim de partida).
-  if (caminho !== ':memory:') db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  migrar(db);
+  await migrar(db);
   return db;
+}
+
+// O cliente ja aberto. Quem chama isto sem ter aberto o banco tem um erro claro
+// em vez de um `null` misterioso tres camadas adiante.
+function cliente() {
+  if (!db) throw new Error('o banco ainda nao foi aberto - chame abrir() na subida do servidor');
+  return db;
+}
+
+// ============================================================================
+// AS QUATRO FUNCOES QUE O RESTO DO CODIGO USA
+// ============================================================================
+
+// Uma linha, ou null. `SELECT ... WHERE id = ?`
+async function um(sql, args = []) {
+  const resposta = await cliente().execute({ sql, args });
+  return resposta.rows[0] || null;
+}
+
+// Todas as linhas, sempre um array (vazio se nao houver nenhuma).
+async function tudo(sql, args = []) {
+  const resposta = await cliente().execute({ sql, args });
+  return resposta.rows;
+}
+
+// INSERT / UPDATE / DELETE. Devolve o resultado bruto (rowsAffected).
+function rodar(sql, args = []) {
+  return cliente().execute({ sql, args });
+}
+
+// Varios comandos de uma vez, separados por `;`. So para estrutura (CREATE
+// TABLE, CREATE INDEX) - nao aceita parametros, entao nunca receba dado de
+// usuario aqui.
+function varios(sql) {
+  return cliente().executeMultiple(sql);
+}
+
+// Um bloco que grava tudo ou nada. Use quando duas escritas precisam acontecer
+// juntas (registrar a partida e os resultados dela, por exemplo).
+async function transacao(acao) {
+  const tx = await cliente().transaction('write');
+  try {
+    const saida = await acao(tx);
+    await tx.commit();
+    return saida;
+  } catch (erro) {
+    await tx.rollback().catch(() => {}); // o erro que importa e o de cima
+    throw erro;
+  }
 }
 
 // ============================================================================
@@ -60,8 +139,8 @@ function abrir(caminho = process.env.BANCO_CAMINHO || CAMINHO_PADRAO) {
 const MIGRACOES = [
   // --------------------------------------------------------------- 0 -> 1
   // Estrutura inicial: contas, partidas e resultados.
-  (banco) => {
-    banco.exec(`
+  async (banco) => {
+    await banco.executeMultiple(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id             TEXT PRIMARY KEY,
         apelido        TEXT NOT NULL,
@@ -109,23 +188,18 @@ const MIGRACOES = [
   },
 
   // --------------------------------------------------------------- 1 -> 2
-  // Google Login de verdade:
-  //   * senha e Google passam a ser OPCIONAIS, desde que exista ao menos um dos
-  //     dois. Isso permite conta so com senha (quem prefere) e conta criada
-  //     sozinha no primeiro "Continuar com Google" (quem nao quer senha).
-  //   * email_chave: o e-mail em minusculas, usado para NAO criar conta
-  //     duplicada quando a mesma pessoa aparece pelo Google.
-  //   * avatar: a foto do perfil do Google.
+  // Aqui senha e login externo passaram a ser OPCIONAIS, desde que existisse ao
+  // menos um dos dois, e entrou a coluna email_chave.
   //
-  // Aqui cabem dois formatos antigos:
+  // Cabem dois formatos antigos:
   //   (a) o primeiro de todos, com as colunas provedor/provedor_id/nome
-  //   (b) o segundo, que exigia apelido+senha+Google juntos
+  //   (b) o segundo, que exigia apelido+senha+login externo juntos
   // Os dois viram o formato novo SEM PERDER NENHUMA LINHA.
-  (banco) => {
-    const colunas = banco.prepare('PRAGMA table_info(usuarios)').all().map((c) => c.name);
+  async (banco) => {
+    const colunas = (await banco.execute('PRAGMA table_info(usuarios)')).rows.map((c) => c.name);
     const formatoOriginal = colunas.includes('provedor');
 
-    banco.exec(`
+    await banco.executeMultiple(`
       CREATE TABLE usuarios_novo (
         id             TEXT PRIMARY KEY,
         apelido        TEXT NOT NULL,
@@ -146,9 +220,9 @@ const MIGRACOES = [
     `);
 
     if (formatoOriginal) {
-      // Formato (a): provedor 'local' guardava a senha; 'google' guardava o sub.
-      // Cada um vira uma conta com a credencial que ela de fato tinha.
-      banco.exec(`
+      // Formato (a): provedor 'local' guardava a senha; o outro guardava o id
+      // externo. Cada um vira uma conta com a credencial que de fato tinha.
+      await banco.executeMultiple(`
         INSERT INTO usuarios_novo
           (id, apelido, apelido_chave, senha_hash, senha_sal, google_sub, google_email,
            email_chave, avatar, criado_em, visto_em, senha_trocada_em)
@@ -166,7 +240,7 @@ const MIGRACOES = [
       `);
     } else {
       // Formato (b): as colunas ja tem os nomes certos; so ganham as novas.
-      banco.exec(`
+      await banco.executeMultiple(`
         INSERT INTO usuarios_novo
           (id, apelido, apelido_chave, senha_hash, senha_sal, google_sub, google_email,
            email_chave, avatar, criado_em, visto_em, senha_trocada_em)
@@ -177,11 +251,11 @@ const MIGRACOES = [
       `);
     }
 
-    const antes = banco.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n;
-    const depois = banco.prepare('SELECT COUNT(*) AS n FROM usuarios_novo').get().n;
+    const antes = (await banco.execute('SELECT COUNT(*) AS n FROM usuarios')).rows[0].n;
+    const depois = (await banco.execute('SELECT COUNT(*) AS n FROM usuarios_novo')).rows[0].n;
 
-    banco.exec('DROP TABLE usuarios; ALTER TABLE usuarios_novo RENAME TO usuarios;');
-    banco.exec('CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios (email_chave);');
+    await banco.executeMultiple('DROP TABLE usuarios; ALTER TABLE usuarios_novo RENAME TO usuarios;');
+    await banco.executeMultiple('CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios (email_chave);');
 
     if (antes !== depois) {
       console.warn(`[banco] migração 1->2: ${antes} contas antes, ${depois} depois.`);
@@ -189,21 +263,22 @@ const MIGRACOES = [
   },
 
   // --------------------------------------------------------------- 2 -> 3
-  // Sai o login com Google, entra o e-mail proprio:
-  //   * `email` + `email_chave` (minusculas, unica) - a identidade verificavel
-  //   * `email_verificado_em` - nulo enquanto a pessoa nao clicar no link
+  // Sai o login externo, entra o e-mail proprio:
+  //   * `email` + `email_chave` (minusculas, unica)
+  //   * `email_verificado_em` - guardado para o futuro; hoje o cadastro nao
+  //     depende de confirmacao para a pessoa jogar nem para pontuar
   //   * some google_sub e avatar
   //   * nasce a tabela `tokens`, dos links de uso unico
   //
   // O QUE ACONTECE COM QUEM JA TEM CONTA:
   //   - quem entrou por apelido+senha mantem tudo; o e-mail fica em branco e
-  //     ela pode preencher depois
-  //   - quem tinha entrado pelo Google fica SEM senha, mas COM o e-mail do
-  //     Google preenchido: e so pedir "esqueci minha senha" e definir uma
+  //     pode ser preenchido depois
+  //   - quem tinha entrado por login externo fica sem senha, mas com o e-mail
+  //     preenchido; o administrador define uma senha nova quando a pessoa pedir
   //   - ninguem e apagado, e por isso o historico de partidas continua inteiro
   //     (apagar um usuario derrubaria os resultados dele em cascata)
-  (banco) => {
-    banco.exec(`
+  async (banco) => {
+    await banco.executeMultiple(`
       CREATE TABLE usuarios_novo (
         id             TEXT PRIMARY KEY,
         apelido        TEXT NOT NULL,
@@ -225,25 +300,21 @@ const MIGRACOES = [
         id, apelido, apelido_chave,
         google_email,
         email_chave,
-        -- O Google ja tinha confirmado esses e-mails; nao faz sentido pedir de novo.
         CASE WHEN google_email IS NOT NULL THEN criado_em ELSE NULL END,
         senha_hash, senha_sal, criado_em, visto_em, senha_trocada_em
       FROM usuarios;
     `);
 
-    banco.exec('DROP TABLE usuarios; ALTER TABLE usuarios_novo RENAME TO usuarios;');
-    banco.exec('CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios (email_chave);');
+    await banco.executeMultiple('DROP TABLE usuarios; ALTER TABLE usuarios_novo RENAME TO usuarios;');
+    await banco.executeMultiple('CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios (email_chave);');
 
-    // Links de uso unico (confirmar e-mail, redefinir senha).
-    //
-    // Guardamos o HASH do token, nunca o token. E a mesma logica da senha: se o
-    // banco vazar, os links que estiverem la dentro nao servem para nada, porque
-    // o que chega pelo e-mail e o valor original.
-    banco.exec(`
+    // Links de uso unico. Guardamos o HASH do token, nunca o token: se o banco
+    // vazar, o que estiver la dentro nao abre nada.
+    await banco.executeMultiple(`
       CREATE TABLE IF NOT EXISTS tokens (
         hash       TEXT PRIMARY KEY,
         usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-        tipo       TEXT NOT NULL,   -- 'verificar' | 'recuperar'
+        tipo       TEXT NOT NULL,
         expira_em  INTEGER NOT NULL,
         usado_em   INTEGER,
         criado_em  INTEGER NOT NULL
@@ -253,18 +324,19 @@ const MIGRACOES = [
   },
 ];
 
-function migrar(banco) {
-  const versao = banco.pragma('user_version', { simple: true });
+async function migrar(banco) {
+  const versao = (await banco.execute('PRAGMA user_version')).rows[0].user_version;
 
   // Bancos que existem desde antes deste sistema de versao aparecem como 0 mas
   // ja tem as tabelas. Reconhecemos isso pela presenca da tabela de usuarios: o
   // degrau 0->1 usa CREATE TABLE IF NOT EXISTS, entao rodar nele e inofensivo.
   for (let degrau = versao; degrau < VERSAO_ATUAL; degrau++) {
-    const aplicar = banco.transaction(() => {
-      MIGRACOES[degrau](banco);
-      banco.pragma(`user_version = ${degrau + 1}`);
-    });
-    aplicar();
+    // De proposito FORA de uma transacao: o SQLite nao permite mexer em
+    // user_version dentro de uma, e varios degraus fazem DDL (CREATE/DROP),
+    // que ja e atomico por comando. Se um degrau falhar no meio, o servidor nao
+    // sobe e o log diz qual foi - nenhum degrau seguinte roda por cima.
+    await MIGRACOES[degrau](banco);
+    await banco.execute(`PRAGMA user_version = ${degrau + 1}`);
     console.log(`[banco] migração aplicada: ${degrau} -> ${degrau + 1}`);
   }
 }
@@ -275,4 +347,17 @@ function fechar() {
   db = null;
 }
 
-module.exports = { abrir, fechar, migrar, CAMINHO_PADRAO, VERSAO_ATUAL };
+module.exports = {
+  abrir,
+  fechar,
+  migrar,
+  cliente,
+  um,
+  tudo,
+  rodar,
+  varios,
+  transacao,
+  enderecoDoBanco,
+  CAMINHO_PADRAO,
+  VERSAO_ATUAL,
+};

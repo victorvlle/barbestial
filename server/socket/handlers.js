@@ -36,11 +36,11 @@ function avisarSala(io, s) {
 // Chamar duas vezes e inofensivo de proposito: quem garante isso e o banco (o
 // id da partida e chave primaria), nao uma flag que poderia se perder num
 // reinicio. Ver registrarPartida em dados/ranking.js.
-function registrarSeAcabou(io, s) {
+async function registrarSeAcabou(io, s) {
   if (!s.estado || s.estado.fase !== 'terminado' || !s.estado.resultado) return;
 
   try {
-    const gravado = ranking.registrarPartida({
+    const gravado = await ranking.registrarPartida({
       partidaId: s.estado.partidaId,
       sala: s.codigo,
       resultado: s.estado.resultado,
@@ -50,11 +50,13 @@ function registrarSeAcabou(io, s) {
     if (gravado.novo) {
       io.emit('ranking-atualizado', {
         semana: ranking.semanaAtual(),
-        ranking: ranking.rankingDaSemana(),
+        ranking: await ranking.rankingDaSemana(),
       });
     }
   } catch (erro) {
     // O ranking e um extra: se ele falhar, a partida continua valendo na tela.
+    // Ninguem espera por esta funcao de proposito - o fim de partida aparece na
+    // tela na hora, e a gravacao acontece logo atras.
     console.error('[ranking] não foi possível registrar a partida:', erro);
   }
 }

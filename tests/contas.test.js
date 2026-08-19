@@ -6,14 +6,19 @@
 process.env.BANCO_CAMINHO = ':memory:';
 process.env.SESSAO_SEGREDO = 'segredo-so-de-teste';
 
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const assert = require('node:assert');
 
+const banco = require('../server/dados/banco');
 const usuarios = require('../server/dados/usuarios');
 const ranking = require('../server/dados/ranking');
 const { criarEstado, jogarCarta, calcularResultado } = require('../server/game/gameState');
 
 let contador = 0;
+
+// O banco agora e assincrono e precisa ser aberto uma vez antes de tudo. Em
+// ':memory:' isso nao toca em disco nenhum.
+before(() => banco.abrir());
 
 const tokens = require('../server/dados/tokens');
 
@@ -29,19 +34,19 @@ const conta = (nome, senha = 'senha1234') => {
 
 // Uma conta que já confirmou o e-mail - é o que o ranking exige para mostrar
 // alguém. Os testes de ranking usam esta.
-const contaConfirmada = (nome, senha = 'senha1234') => confirmar(conta(nome, senha));
+const contaConfirmada = async (nome, senha = 'senha1234') => await confirmar(await conta(nome, senha));
 
 // Confirma o e-mail de uma conta pelo caminho de verdade: cria o token e
 // consome, exatamente como o clique no link faria.
-function confirmar(usuario) {
-  const token = tokens.criar(usuario.id, 'verificar');
-  return usuarios.marcarEmailVerificado(tokens.consumir(token, 'verificar'));
+async function confirmar(usuario) {
+  const token = await tokens.criar(usuario.id, 'verificar');
+  return await usuarios.marcarEmailVerificado(await tokens.consumir(token, 'verificar'));
 }
 
 // Roda a funcao e devolve o erro que ela lancou (ou null).
-function oQueDeuErrado(acao) {
+async function oQueDeuErrado(acao) {
   try {
-    acao();
+    await acao();
     return null;
   } catch (erro) {
     return erro;
@@ -50,8 +55,8 @@ function oQueDeuErrado(acao) {
 
 // ============================================================ 1. cadastro
 
-test('cria uma conta com e-mail, apelido e senha, e entra com ela', () => {
-  const criada = usuarios.criarConta({
+test('cria uma conta com e-mail, apelido e senha, e entra com ela', async () => {
+  const criada = await usuarios.criarConta({
     email: 'victor@exemplo.test',
     apelido: 'Victor',
     senha: 'batatinha',
@@ -61,69 +66,69 @@ test('cria uma conta com e-mail, apelido e senha, e entra com ela', () => {
   assert.ok(criada.id, 'a conta precisa de um identificador único');
   assert.strictEqual(criada.email_verificado_em, null, 'nasce sem confirmar');
 
-  assert.strictEqual(usuarios.entrarComSenha('Victor', 'batatinha').id, criada.id);
+  assert.strictEqual((await usuarios.entrarComSenha('Victor', 'batatinha')).id, criada.id);
 });
 
-test('dá para entrar pelo apelido OU pelo e-mail', () => {
-  const criada = conta('Dois');
-  assert.strictEqual(usuarios.entrarComSenha(criada.apelido, 'senha1234').id, criada.id);
-  assert.strictEqual(usuarios.entrarComSenha(criada.email, 'senha1234').id, criada.id);
+test('dá para entrar pelo apelido OU pelo e-mail', async () => {
+  const criada = await conta('Dois');
+  assert.strictEqual((await usuarios.entrarComSenha(criada.apelido, 'senha1234')).id, criada.id);
+  assert.strictEqual((await usuarios.entrarComSenha(criada.email, 'senha1234')).id, criada.id);
 });
 
-test('sem e-mail não existe cadastro', () => {
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ email: '', apelido: 'SemEmail', senha: 'senha1234' })
+test('sem e-mail não existe cadastro', async () => {
+  const erro = await oQueDeuErrado(async () =>
+    await usuarios.criarConta({ email: '', apelido: 'SemEmail', senha: 'senha1234' })
   );
   assert.match(erro.message, /e-mail/i);
-  assert.strictEqual(usuarios.porApelido('SemEmail'), null, 'e a conta não foi criada');
+  assert.strictEqual(await usuarios.porApelido('SemEmail'), null, 'e a conta não foi criada');
 });
 
-test('e-mail malformado é recusado', () => {
+test('e-mail malformado é recusado', async () => {
   for (const ruim of ['abc', 'a@b', 'sem arroba.com', '@exemplo.test', 'a b@c.com']) {
-    const erro = oQueDeuErrado(() =>
-      usuarios.criarConta({ email: ruim, apelido: `Ruim${++contador}`, senha: 'senha1234' })
+    const erro = await oQueDeuErrado(async () =>
+      await usuarios.criarConta({ email: ruim, apelido: `Ruim${++contador}`, senha: 'senha1234' })
     );
     assert.ok(erro, `deveria recusar "${ruim}"`);
   }
 });
 
-test('e-mail repetido é recusado, sem diferenciar maiúsculas', () => {
-  usuarios.criarConta({ email: 'igual@exemplo.test', apelido: 'PrimeiroAqui', senha: 'senha1234' });
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ email: 'IGUAL@Exemplo.Test', apelido: 'SegundoAqui', senha: 'senha1234' })
+test('e-mail repetido é recusado, sem diferenciar maiúsculas', async () => {
+  await usuarios.criarConta({ email: 'igual@exemplo.test', apelido: 'PrimeiroAqui', senha: 'senha1234' });
+  const erro = await oQueDeuErrado(async () =>
+    await usuarios.criarConta({ email: 'IGUAL@Exemplo.Test', apelido: 'SegundoAqui', senha: 'senha1234' })
   );
   assert.match(erro.message, /Já existe uma conta com esse e-mail/);
 });
 
-test('apelido repetido é recusado', () => {
-  usuarios.criarConta({ email: 'r1@exemplo.test', apelido: 'Repetido', senha: 'senha1234' });
-  const erro = oQueDeuErrado(() =>
-    usuarios.criarConta({ email: 'r2@exemplo.test', apelido: 'repetido', senha: 'outra1234' })
+test('apelido repetido é recusado', async () => {
+  await usuarios.criarConta({ email: 'r1@exemplo.test', apelido: 'Repetido', senha: 'senha1234' });
+  const erro = await oQueDeuErrado(async () =>
+    await usuarios.criarConta({ email: 'r2@exemplo.test', apelido: 'repetido', senha: 'outra1234' })
   );
   assert.match(erro.message, /já está em uso/);
 });
 
-test('apelido curto ou com símbolos estranhos é recusado', () => {
-  assert.ok(oQueDeuErrado(() => usuarios.criarConta({ email: 'a@b.com', apelido: 'ab', senha: 'senha1234' })));
-  assert.ok(oQueDeuErrado(() => usuarios.criarConta({ email: 'a@b.com', apelido: 'a b<c>', senha: 'senha1234' })));
+test('apelido curto ou com símbolos estranhos é recusado', async () => {
+  assert.ok(await oQueDeuErrado(async () => await usuarios.criarConta({ email: 'a@b.com', apelido: 'ab', senha: 'senha1234' })));
+  assert.ok(await oQueDeuErrado(async () => await usuarios.criarConta({ email: 'a@b.com', apelido: 'a b<c>', senha: 'senha1234' })));
 });
 
 // ============================================================ 2. senhas
 
-test('a senha nunca é guardada em texto puro', () => {
-  const criada = conta('Segredo', 'minhasenha');
+test('a senha nunca é guardada em texto puro', async () => {
+  const criada = await conta('Segredo', 'minhasenha');
   assert.ok(criada.senha_hash && criada.senha_hash !== 'minhasenha');
   assert.ok(criada.senha_sal, 'cada conta tem o próprio sal');
 
   // Duas contas com a MESMA senha têm hashes diferentes - é para isso que
   // serve o sal: uma tabela de senhas prontas não serve para nada.
-  assert.notStrictEqual(criada.senha_hash, conta('Segredo', 'minhasenha').senha_hash);
+  assert.notStrictEqual(criada.senha_hash, (await conta('Segredo', 'minhasenha')).senha_hash);
 });
 
-test('senha errada não entra, e o erro não revela se a conta existe', () => {
-  const criada = conta('Maria', 'certa1234');
-  const erroSenha = oQueDeuErrado(() => usuarios.entrarComSenha(criada.apelido, 'errada'));
-  const erroConta = oQueDeuErrado(() => usuarios.entrarComSenha('NinguemAssim', 'errada'));
+test('senha errada não entra, e o erro não revela se a conta existe', async () => {
+  const criada = await conta('Maria', 'certa1234');
+  const erroSenha = await oQueDeuErrado(async () => await usuarios.entrarComSenha(criada.apelido, 'errada'));
+  const erroConta = await oQueDeuErrado(async () => await usuarios.entrarComSenha('NinguemAssim', 'errada'));
 
   assert.ok(erroSenha && erroConta, 'os dois casos precisam recusar');
   assert.strictEqual(
@@ -133,108 +138,108 @@ test('senha errada não entra, e o erro não revela se a conta existe', () => {
   );
 });
 
-test('o que vai para o cliente não leva hash nem sal', () => {
-  const enviado = usuarios.paraOCliente(conta('Publico'));
+test('o que vai para o cliente não leva hash nem sal', async () => {
+  const enviado = usuarios.paraOCliente(await conta('Publico'));
   assert.deepStrictEqual(Object.keys(enviado).sort(), ['email', 'id', 'nome', 'verificado']);
   assert.ok(!JSON.stringify(enviado).includes('hash'));
 });
 
 // ============================================================ 3. verificação
 
-test('a conta nasce sem confirmar e o link confirma', () => {
-  const criada = conta('Confirmando');
+test('a conta nasce sem confirmar e o link confirma', async () => {
+  const criada = await conta('Confirmando');
   assert.strictEqual(usuarios.verificado(criada), false);
 
-  const depois = confirmar(criada);
+  const depois = await confirmar(criada);
   assert.ok(depois.email_verificado_em, 'ficou com a data da confirmação');
   assert.strictEqual(usuarios.verificado(depois), true);
 });
 
-test('confirmar duas vezes não quebra nem muda a data', () => {
-  const criada = conta('Duas');
-  const primeira = confirmar(criada);
-  const segunda = usuarios.marcarEmailVerificado(criada.id);
+test('confirmar duas vezes não quebra nem muda a data', async () => {
+  const criada = await conta('Duas');
+  const primeira = await confirmar(criada);
+  const segunda = await usuarios.marcarEmailVerificado(criada.id);
   assert.strictEqual(segunda.email_verificado_em, primeira.email_verificado_em);
 });
 
-test('quem digitou o e-mail errado pode corrigir, e volta a não confirmado', () => {
-  const criada = conta('Errou');
-  usuarios.trocarEmail(criada.id, 'certo@exemplo.test');
-  const depois = usuarios.porId(criada.id);
+test('quem digitou o e-mail errado pode corrigir, e volta a não confirmado', async () => {
+  const criada = await conta('Errou');
+  await usuarios.trocarEmail(criada.id, 'certo@exemplo.test');
+  const depois = await usuarios.porId(criada.id);
   assert.strictEqual(depois.email, 'certo@exemplo.test');
   assert.strictEqual(depois.email_verificado_em, null);
 
   // E não dá para roubar o e-mail de outra conta.
-  const outra = conta('Outra');
-  const erro = oQueDeuErrado(() => usuarios.trocarEmail(criada.id, outra.email));
+  const outra = await conta('Outra');
+  const erro = await oQueDeuErrado(async () => await usuarios.trocarEmail(criada.id, outra.email));
   assert.match(erro.message, /Já existe uma conta/);
 });
 
 // ============================================================ 4. tokens
 
-test('o token é de uso único', () => {
-  const criada = conta('UsoUnico');
-  const token = tokens.criar(criada.id, 'recuperar');
+test('o token é de uso único', async () => {
+  const criada = await conta('UsoUnico');
+  const token = await tokens.criar(criada.id, 'recuperar');
 
-  assert.strictEqual(tokens.consumir(token, 'recuperar'), criada.id);
-  const erro = oQueDeuErrado(() => tokens.consumir(token, 'recuperar'));
+  assert.strictEqual(await tokens.consumir(token, 'recuperar'), criada.id);
+  const erro = await oQueDeuErrado(async () => await tokens.consumir(token, 'recuperar'));
   assert.match(erro.message, /já foi usado/);
 });
 
-test('o token expira', () => {
-  const criada = conta('Expirado');
-  const token = tokens.criar(criada.id, 'recuperar');
+test('o token expira', async () => {
+  const criada = await conta('Expirado');
+  const token = await tokens.criar(criada.id, 'recuperar');
   const depoisDoPrazo = Date.now() + tokens.VALIDADE.recuperar + 1000;
 
-  const erro = oQueDeuErrado(() => tokens.consumir(token, 'recuperar', depoisDoPrazo));
+  const erro = await oQueDeuErrado(async () => await tokens.consumir(token, 'recuperar', depoisDoPrazo));
   assert.match(erro.message, /expirou/);
 });
 
-test('pedir um link novo invalida o anterior', () => {
+test('pedir um link novo invalida o anterior', async () => {
   // Senão cada clique em "esqueci a senha" deixaria mais uma chave válida
   // circulando pela caixa de entrada.
-  const criada = conta('Novo');
-  const antigo = tokens.criar(criada.id, 'recuperar');
-  const recente = tokens.criar(criada.id, 'recuperar');
+  const criada = await conta('Novo');
+  const antigo = await tokens.criar(criada.id, 'recuperar');
+  const recente = await tokens.criar(criada.id, 'recuperar');
 
-  assert.ok(oQueDeuErrado(() => tokens.consumir(antigo, 'recuperar')), 'o antigo morreu');
-  assert.strictEqual(tokens.consumir(recente, 'recuperar'), criada.id);
+  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(antigo, 'recuperar')), 'o antigo morreu');
+  assert.strictEqual(await tokens.consumir(recente, 'recuperar'), criada.id);
 });
 
-test('token de um tipo não serve para o outro', () => {
+test('token de um tipo não serve para o outro', async () => {
   // Um link de confirmação de e-mail não pode virar um link de trocar senha.
-  const criada = conta('Tipos');
-  const verificacao = tokens.criar(criada.id, 'verificar');
-  assert.ok(oQueDeuErrado(() => tokens.consumir(verificacao, 'recuperar')));
+  const criada = await conta('Tipos');
+  const verificacao = await tokens.criar(criada.id, 'verificar');
+  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(verificacao, 'recuperar')));
 });
 
-test('token inventado não vale', () => {
-  assert.ok(oQueDeuErrado(() => tokens.consumir('inventei-esse-aqui', 'recuperar')));
-  assert.ok(oQueDeuErrado(() => tokens.consumir('', 'recuperar')));
-  assert.ok(oQueDeuErrado(() => tokens.consumir(null, 'verificar')));
+test('token inventado não vale', async () => {
+  assert.ok(await oQueDeuErrado(async () => await tokens.consumir('inventei-esse-aqui', 'recuperar')));
+  assert.ok(await oQueDeuErrado(async () => await tokens.consumir('', 'recuperar')));
+  assert.ok(await oQueDeuErrado(async () => await tokens.consumir(null, 'verificar')));
 });
 
-test('o banco guarda o HASH do token, nunca o token', () => {
+test('o banco guarda o HASH do token, nunca o token', async () => {
   // Se o banco vazar, os links que estiverem lá dentro não abrem nada.
-  const criada = conta('Hashado');
-  const token = tokens.criar(criada.id, 'recuperar');
-  const linhas = require('../server/dados/banco').abrir().prepare('SELECT * FROM tokens').all();
+  const criada = await conta('Hashado');
+  const token = await tokens.criar(criada.id, 'recuperar');
+  const linhas = await banco.tudo('SELECT * FROM tokens');
   assert.ok(linhas.length > 0);
   assert.ok(!linhas.some((l) => l.hash === token), 'o valor original não pode estar no banco');
 });
 
 // ============================================================ 5. recuperação
 
-test('o link do e-mail define a senha nova e já confirma o e-mail', () => {
-  const criada = conta('Esquecido', 'velha1234');
+test('o link do e-mail define a senha nova e já confirma o e-mail', async () => {
+  const criada = await conta('Esquecido', 'velha1234');
   assert.strictEqual(usuarios.verificado(criada), false);
 
-  const token = tokens.criar(criada.id, 'recuperar');
-  const depois = usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), 'nova12345');
+  const token = await tokens.criar(criada.id, 'recuperar');
+  const depois = await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), 'nova12345');
 
-  assert.ok(usuarios.entrarComSenha(criada.apelido, 'nova12345'), 'a senha nova funciona');
+  assert.ok(await usuarios.entrarComSenha(criada.apelido, 'nova12345'), 'a senha nova funciona');
   assert.ok(
-    oQueDeuErrado(() => usuarios.entrarComSenha(criada.apelido, 'velha1234')),
+    await oQueDeuErrado(async () => await usuarios.entrarComSenha(criada.apelido, 'velha1234')),
     'e a antiga deixa de funcionar'
   );
   // Quem abriu o link provou que a caixa de entrada é dele - que é justamente
@@ -242,74 +247,74 @@ test('o link do e-mail define a senha nova e já confirma o e-mail', () => {
   assert.ok(depois.email_verificado_em, 'o e-mail fica confirmado de brinde');
 });
 
-test('SABER O APELIDO NÃO RECUPERA NADA', () => {
+test('SABER O APELIDO NÃO RECUPERA NADA', async () => {
   // O ponto central do desenho: a recuperação começa por um e-mail que só o
   // dono recebe. Conhecer o apelido - que aparece no ranking para todo mundo -
   // não dá nenhum passo em direção à conta.
-  const vitima = conta('Alvo', 'senha1234');
-  const atacante = conta('Atacante');
+  const vitima = await conta('Alvo', 'senha1234');
+  const atacante = await conta('Atacante');
   // O apelido real tem sufixo (Alvo1, Alvo2...) porque os testes rodam em
   // sequência no mesmo banco.
 
   // O atacante só consegue gerar token para a conta DELE.
-  const token = tokens.criar(atacante.id, 'recuperar');
-  const mexeu = usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), 'senha-do-atacante');
+  const token = await tokens.criar(atacante.id, 'recuperar');
+  const mexeu = await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), 'senha-do-atacante');
 
   assert.strictEqual(mexeu.id, atacante.id, 'ele só trocou a própria senha');
   assert.ok(
-    usuarios.entrarComSenha(vitima.apelido, 'senha1234'),
+    await usuarios.entrarComSenha(vitima.apelido, 'senha1234'),
     'a senha da vítima continua valendo'
   );
 });
 
-test('recuperação também exige senha nova válida', () => {
-  const criada = conta('Curta');
-  const token = tokens.criar(criada.id, 'recuperar');
-  const erro = oQueDeuErrado(() =>
-    usuarios.definirSenhaPorToken(tokens.consumir(token, 'recuperar'), '123')
+test('recuperação também exige senha nova válida', async () => {
+  const criada = await conta('Curta');
+  const token = await tokens.criar(criada.id, 'recuperar');
+  const erro = await oQueDeuErrado(async () =>
+    await usuarios.definirSenhaPorToken(await tokens.consumir(token, 'recuperar'), '123')
   );
   assert.match(erro.message, /pelo menos/);
 });
 
-test('trocar a senha estando logado exige a senha atual', () => {
-  const criada = conta('Troca', 'atual1234');
-  assert.ok(oQueDeuErrado(() => usuarios.trocarSenha(criada.id, 'chutei', 'nova12345')));
-  usuarios.trocarSenha(criada.id, 'atual1234', 'nova12345');
-  assert.ok(usuarios.entrarComSenha(criada.apelido, 'nova12345'));
+test('trocar a senha estando logado exige a senha atual', async () => {
+  const criada = await conta('Troca', 'atual1234');
+  assert.ok(await oQueDeuErrado(async () => await usuarios.trocarSenha(criada.id, 'chutei', 'nova12345')));
+  await usuarios.trocarSenha(criada.id, 'atual1234', 'nova12345');
+  assert.ok(await usuarios.entrarComSenha(criada.apelido, 'nova12345'));
 });
 
 // ============================================================ 6. sessão
 
-test('a sessão identifica o dono e sobrevive a um F5', () => {
-  const criada = conta('Sessao');
-  assert.strictEqual(usuarios.lerSessao(usuarios.criarSessao(criada.id)).id, criada.id);
+test('a sessão identifica o dono e sobrevive a um F5', async () => {
+  const criada = await conta('Sessao');
+  assert.strictEqual((await usuarios.lerSessao(usuarios.criarSessao(criada.id))).id, criada.id);
 });
 
-test('token adulterado, vencido ou inventado não vale', () => {
-  const criada = conta('Cracha');
+test('token adulterado, vencido ou inventado não vale', async () => {
+  const criada = await conta('Cracha');
   const token = usuarios.criarSessao(criada.id);
 
   // Mexe no ÚLTIMO caractere da assinatura. Trocar sempre por '0' seria um teste
   // que passa quase sempre: quando o último caractere já fosse '0', o crachá
   // continuaria idêntico e válido. Aqui a troca muda o token com certeza.
   const mexido = token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a');
-  assert.strictEqual(usuarios.lerSessao(mexido), null, 'assinatura mexida');
-  assert.strictEqual(usuarios.lerSessao('qualquer.coisa.aqui'), null, 'token inventado');
-  assert.strictEqual(usuarios.lerSessao(''), null);
-  assert.strictEqual(usuarios.lerSessao(null), null);
+  assert.strictEqual(await usuarios.lerSessao(mexido), null, 'assinatura mexida');
+  assert.strictEqual(await usuarios.lerSessao('qualquer.coisa.aqui'), null, 'token inventado');
+  assert.strictEqual(await usuarios.lerSessao(''), null);
+  assert.strictEqual(await usuarios.lerSessao(null), null);
 
   // Trocar o id mantendo a assinatura antiga também não passa.
-  const outro = conta('Outro');
+  const outro = await conta('Outro');
   const [, expira, assinatura] = token.split('.');
-  assert.strictEqual(usuarios.lerSessao(`${outro.id}.${expira}.${assinatura}`), null);
+  assert.strictEqual(await usuarios.lerSessao(`${outro.id}.${expira}.${assinatura}`), null);
 
   const vencido = usuarios.criarSessao(criada.id, Date.now() - usuarios.DURACAO_DA_SESSAO_MS - 1000);
-  assert.strictEqual(usuarios.lerSessao(vencido), null, 'sessão vencida');
+  assert.strictEqual(await usuarios.lerSessao(vencido), null, 'sessão vencida');
 });
 
 // ============================================================ 3. a semana
 
-test('a semana vai de segunda 00:00 a domingo 23:59 no horário de Brasília', () => {
+test('a semana vai de segunda 00:00 a domingo 23:59 no horário de Brasília', async () => {
   const segunda = Date.parse('2026-08-17T03:00:00Z'); // segunda 00:00 em UTC-3
   const semana = ranking.semanaAtual(segunda);
 
@@ -324,7 +329,7 @@ test('a semana vai de segunda 00:00 a domingo 23:59 no horário de Brasília', (
   assert.notStrictEqual(ranking.chaveDaSemana(semana.fim + 1000), semana.chave);
 });
 
-test('a chave da semana ordena sozinha e é estável dentro da semana', () => {
+test('a chave da semana ordena sozinha e é estável dentro da semana', async () => {
   const quarta = Date.parse('2026-08-19T15:00:00Z');
   const sexta = Date.parse('2026-08-21T09:00:00Z');
   assert.strictEqual(ranking.chaveDaSemana(quarta), ranking.chaveDaSemana(sexta));
@@ -334,26 +339,26 @@ test('a chave da semana ordena sozinha e é estável dentro da semana', () => {
 
 // ============================================================ 4. pontuacao
 
-test('mesa de 2: o vencedor leva 1 ponto e o segundo, nenhum', () => {
+test('mesa de 2: o vencedor leva 1 ponto e o segundo, nenhum', async () => {
   assert.deepStrictEqual([1, 2].map((p) => ranking.pontosDaPosicao(p, 2)), [1, 0]);
 });
 
-test('mesa de 3: 2, 1 e 0', () => {
+test('mesa de 3: 2, 1 e 0', async () => {
   assert.deepStrictEqual([1, 2, 3].map((p) => ranking.pontosDaPosicao(p, 3)), [2, 1, 0]);
 });
 
-test('mesa de 4: a tabela padrão 5, 3, 2, 1', () => {
+test('mesa de 4: a tabela padrão 5, 3, 2, 1', async () => {
   assert.deepStrictEqual([1, 2, 3, 4].map((p) => ranking.pontosDaPosicao(p, 4)), [5, 3, 2, 1]);
 });
 
-test('mais de 4 jogadores usa o padrão e quem passa do 4º não pontua', () => {
+test('mais de 4 jogadores usa o padrão e quem passa do 4º não pontua', async () => {
   assert.deepStrictEqual(
     [1, 2, 3, 4, 5, 6].map((p) => ranking.pontosDaPosicao(p, 6)),
     [5, 3, 2, 1, 0, 0]
   );
 });
 
-test('mudar a pontuação é mexer numa tabela só', () => {
+test('mudar a pontuação é mexer numa tabela só', async () => {
   // Este teste existe como documentação executável: se um dia a estrutura
   // deixar de ser "posições em ordem", ele quebra e avisa.
   assert.deepStrictEqual(ranking.TABELAS_DE_PONTOS[2], [1, 0]);
@@ -363,7 +368,7 @@ test('mudar a pontuação é mexer numa tabela só', () => {
 
 // ============================================================ 5. empates
 
-test('desempate: mais animais no bar; empatando, a menor soma de forças', () => {
+test('desempate: mais animais no bar; empatando, a menor soma de forças', async () => {
   const posicoes = ranking.posicionar([
     { id: 'a', entraram: 3, somaForcas: 20 },
     { id: 'b', entraram: 2, somaForcas: 5 },
@@ -372,7 +377,7 @@ test('desempate: mais animais no bar; empatando, a menor soma de forças', () =>
   assert.deepStrictEqual(posicoes.map((p) => [p.id, p.posicao]), [['a', 1], ['b', 2], ['c', 3]]);
 });
 
-test('empate de verdade: mesma posição, mesmos pontos, e a seguinte é pulada', () => {
+test('empate de verdade: mesma posição, mesmos pontos, e a seguinte é pulada', async () => {
   const posicoes = ranking.posicionar([
     { id: 'a', entraram: 3, somaForcas: 10 },
     { id: 'b', entraram: 3, somaForcas: 10 }, // empatou nos dois critérios
@@ -395,12 +400,12 @@ const resultadoCom = (linhas) => ({
   empatados: [],
 });
 
-test('uma partida vira pontos das pessoas certas', () => {
-  const ana = contaConfirmada('Ana');
-  const bento = contaConfirmada('Bento');
-  const clara = contaConfirmada('Clara');
+test('uma partida vira pontos das pessoas certas', async () => {
+  const ana = await contaConfirmada('Ana');
+  const bento = await contaConfirmada('Bento');
+  const clara = await contaConfirmada('Clara');
 
-  const gravado = ranking.registrarPartida({
+  const gravado = await ranking.registrarPartida({
     partidaId: 'partida-basica',
     sala: 'AB12',
     resultado: resultadoCom([
@@ -414,9 +419,9 @@ test('uma partida vira pontos das pessoas certas', () => {
   assert.deepStrictEqual(gravado.jogadores.map((j) => j.pontos), [2, 1, 0]); // mesa de 3
 });
 
-test('a mesma partida nunca conta duas vezes', () => {
-  const ana = contaConfirmada('Dupla');
-  const bento = contaConfirmada('Dupla');
+test('a mesma partida nunca conta duas vezes', async () => {
+  const ana = await contaConfirmada('Dupla');
+  const bento = await contaConfirmada('Dupla');
   const dados = {
     partidaId: 'partida-repetida',
     resultado: resultadoCom([
@@ -425,23 +430,23 @@ test('a mesma partida nunca conta duas vezes', () => {
     ]),
   };
 
-  assert.strictEqual(ranking.registrarPartida(dados).novo, true);
-  assert.strictEqual(ranking.registrarPartida(dados).novo, false, 'a segunda vez é ignorada');
-  assert.strictEqual(ranking.registrarPartida(dados).novo, false);
+  assert.strictEqual((await ranking.registrarPartida(dados)).novo, true);
+  assert.strictEqual((await ranking.registrarPartida(dados)).novo, false, 'a segunda vez é ignorada');
+  assert.strictEqual((await ranking.registrarPartida(dados)).novo, false);
 
-  const linha = ranking.rankingDaSemana().find((j) => j.id === ana.id);
+  const linha = (await ranking.rankingDaSemana()).find((j) => j.id === ana.id);
   assert.strictEqual(linha.partidas, 1, 'continua sendo uma partida só');
   assert.strictEqual(linha.pontos, 1);
 });
 
-test('o ranking soma várias partidas e ordena por pontos', () => {
+test('o ranking soma várias partidas e ordena por pontos', async () => {
   const semana = ranking.chaveDaSemana();
-  const forte = contaConfirmada('Forte');
-  const medio = contaConfirmada('Medio');
-  const fraco = contaConfirmada('Fraco');
+  const forte = await contaConfirmada('Forte');
+  const medio = await contaConfirmada('Medio');
+  const fraco = await contaConfirmada('Fraco');
 
   for (let i = 0; i < 3; i++) {
-    ranking.registrarPartida({
+    await ranking.registrarPartida({
       partidaId: `soma-${i}`,
       resultado: resultadoCom([
         { id: forte.id, entraram: 4, somaForcas: 20 },
@@ -451,7 +456,7 @@ test('o ranking soma várias partidas e ordena por pontos', () => {
     });
   }
 
-  const tabela = ranking.rankingDaSemana(semana);
+  const tabela = await ranking.rankingDaSemana(semana);
   const meu = (id) => tabela.find((l) => l.id === id);
   assert.strictEqual(meu(forte.id).pontos, 6); // 2 pontos x 3 partidas
   assert.strictEqual(meu(medio.id).pontos, 3);
@@ -460,17 +465,17 @@ test('o ranking soma várias partidas e ordena por pontos', () => {
   assert.strictEqual(meu(forte.id).vitorias, 3);
 });
 
-test('virar a semana zera o ranking mas não apaga o passado', () => {
+test('virar a semana zera o ranking mas não apaga o passado', async () => {
   const semanaPassada = Date.parse('2026-08-12T15:00:00Z'); // uma quarta
   const estaSemana = Date.parse('2026-08-19T15:00:00Z'); // a quarta seguinte
   const chaveVelha = ranking.chaveDaSemana(semanaPassada);
   const chaveNova = ranking.chaveDaSemana(estaSemana);
   assert.notStrictEqual(chaveVelha, chaveNova);
 
-  const veterano = contaConfirmada('Veterano');
-  const novato = contaConfirmada('Novato');
+  const veterano = await contaConfirmada('Veterano');
+  const novato = await contaConfirmada('Novato');
 
-  ranking.registrarPartida({
+  await ranking.registrarPartida({
     partidaId: 'semana-passada',
     quando: semanaPassada,
     resultado: resultadoCom([
@@ -480,29 +485,29 @@ test('virar a semana zera o ranking mas não apaga o passado', () => {
   });
 
   // Na semana nova, quem pontuou na semana passada começa do zero...
-  const agora = ranking.rankingDaSemana(chaveNova);
+  const agora = await ranking.rankingDaSemana(chaveNova);
   assert.ok(!agora.some((l) => l.id === veterano.id), 'a semana nova começa vazia para ele');
 
   // ...mas a semana passada continua consultável, inteira.
-  const antes = ranking.rankingDaSemana(chaveVelha);
+  const antes = await ranking.rankingDaSemana(chaveVelha);
   assert.strictEqual(antes.find((l) => l.id === veterano.id).pontos, 1);
 
   assert.ok(
-    ranking.semanasComPartidas().some((s) => s.semana === chaveVelha),
+    (await ranking.semanasComPartidas()).some((s) => s.semana === chaveVelha),
     'a semana antiga aparece no histórico'
   );
-  assert.strictEqual(ranking.partidasDoUsuario(veterano.id).length, 1);
+  assert.strictEqual((await ranking.partidasDoUsuario(veterano.id)).length, 1);
 });
 
-test('partida sem identificação é recusada', () => {
-  assert.throws(() => ranking.registrarPartida({ resultado: resultadoCom([]) }), /identificação/);
+test('partida sem identificação é recusada', async () => {
+  assert.match((await oQueDeuErrado(() => ranking.registrarPartida({ resultado: resultadoCom([]) }))).message, /identificação/);
 });
 
 // ============================================================ 7. de ponta a ponta
 
-test('uma partida de verdade, do início ao fim, vira pontos', () => {
-  const ana = contaConfirmada('PontaA');
-  const bento = contaConfirmada('PontaB');
+test('uma partida de verdade, do início ao fim, vira pontos', async () => {
+  const ana = await contaConfirmada('PontaA');
+  const bento = await contaConfirmada('PontaB');
 
   // O id da conta é o id do jogador dentro do jogo - é isso que amarra a
   // partida à pessoa sem nenhuma tradução no meio.
@@ -526,7 +531,7 @@ test('uma partida de verdade, do início ao fim, vira pontos', () => {
   assert.strictEqual(estado.fase, 'terminado', 'a partida terminou sozinha');
   assert.ok(estado.partidaId, 'a partida tem identificação própria');
 
-  const gravado = ranking.registrarPartida({
+  const gravado = await ranking.registrarPartida({
     partidaId: estado.partidaId,
     resultado: calcularResultado(estado),
   });

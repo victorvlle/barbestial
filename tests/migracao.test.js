@@ -10,22 +10,33 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const Database = require('better-sqlite3');
+const { createClient } = require('@libsql/client');
 
 const { migrar, VERSAO_ATUAL } = require('../server/dados/banco');
 
-// Um arquivo descartável por teste.
+// Um ARQUIVO descartável por teste - de propósito, e não um banco de memória:
+// a migração precisa se comportar como no servidor de verdade.
+let contador = 0;
 function bancoTemporario() {
-  const caminho = path.join(os.tmpdir(), `bb-migra-${Math.random().toString(36).slice(2)}.db`);
-  const banco = new Database(caminho);
-  banco.pragma('foreign_keys = ON');
-  return { banco, apagar: () => { banco.close(); fs.rmSync(caminho, { force: true }); } };
+  const caminho = path.join(os.tmpdir(), `bb-migra-${process.pid}-${++contador}.db`);
+  const banco = createClient({ url: `file:${caminho}` });
+  return {
+    banco,
+    apagar: () => {
+      banco.close();
+      for (const sufixo of ['', '-wal', '-shm']) fs.rmSync(caminho + sufixo, { force: true });
+    },
+  };
 }
+
+// Atalhos, para os testes lerem como antes.
+const uma = async (banco, sql, args = []) => (await banco.execute({ sql, args })).rows[0] || null;
+const todas = async (banco, sql, args = []) => (await banco.execute({ sql, args })).rows;
 
 // ------------------------------------------------ formato 1: provedor/nome
 // A primeira versão: uma conta era OU 'local' (apelido+senha) OU 'google'.
-function montarFormatoOriginal(banco) {
-  banco.exec(`
+async function montarFormatoOriginal(banco) {
+  await banco.executeMultiple(`
     CREATE TABLE usuarios (
       id TEXT PRIMARY KEY, provedor TEXT NOT NULL, provedor_id TEXT NOT NULL,
       nome TEXT NOT NULL, senha_hash TEXT, senha_sal TEXT,
@@ -55,8 +66,8 @@ function montarFormatoOriginal(banco) {
 }
 
 // ------------------------------------------ formato 2: os três obrigatórios
-function montarFormatoEstrito(banco) {
-  banco.exec(`
+async function montarFormatoEstrito(banco) {
+  await banco.executeMultiple(`
     CREATE TABLE usuarios (
       id TEXT PRIMARY KEY, apelido TEXT NOT NULL, apelido_chave TEXT NOT NULL UNIQUE,
       senha_hash TEXT NOT NULL, senha_sal TEXT NOT NULL,
@@ -85,21 +96,20 @@ function montarFormatoEstrito(banco) {
 
 // ============================================================ banco novo
 
-test('banco novo nasce já na versão atual e com as tabelas certas', () => {
+test('banco novo nasce já na versão atual e com as tabelas certas', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    migrar(banco);
-    assert.strictEqual(banco.pragma('user_version', { simple: true }), VERSAO_ATUAL);
+    await migrar(banco);
+    assert.strictEqual((await uma(banco, 'PRAGMA user_version')).user_version, VERSAO_ATUAL);
 
-    const tabelas = banco
-      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-      .all()
-      .map((t) => t.name);
+    const tabelas = (await todas(banco, "SELECT name FROM sqlite_master WHERE type='table'")).map(
+      (t) => t.name
+    );
     for (const esperada of ['usuarios', 'partidas', 'resultados']) {
       assert.ok(tabelas.includes(esperada), `falta a tabela ${esperada}`);
     }
 
-    const colunas = banco.prepare('PRAGMA table_info(usuarios)').all().map((c) => c.name);
+    const colunas = (await todas(banco, 'PRAGMA table_info(usuarios)')).map((c) => c.name);
     for (const coluna of ['email', 'email_chave', 'email_verificado_em', 'senha_hash', 'senha_sal']) {
       assert.ok(colunas.includes(coluna), `falta a coluna ${coluna}`);
     }
@@ -113,13 +123,13 @@ test('banco novo nasce já na versão atual e com as tabelas certas', () => {
   }
 });
 
-test('rodar a migração de novo não faz nada (é seguro reiniciar o servidor)', () => {
+test('rodar a migração de novo não faz nada (é seguro reiniciar o servidor)', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    migrar(banco);
-    migrar(banco);
-    migrar(banco);
-    assert.strictEqual(banco.pragma('user_version', { simple: true }), VERSAO_ATUAL);
+    await migrar(banco);
+    await migrar(banco);
+    await migrar(banco);
+    assert.strictEqual((await uma(banco, 'PRAGMA user_version')).user_version, VERSAO_ATUAL);
   } finally {
     apagar();
   }
@@ -127,13 +137,13 @@ test('rodar a migração de novo não faz nada (é seguro reiniciar o servidor)'
 
 // ============================================= formato original preservado
 
-test('formato original: as 3 contas sobrevivem, cada uma com a credencial que tinha', () => {
+test('formato original: as 3 contas sobrevivem, cada uma com a credencial que tinha', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    montarFormatoOriginal(banco);
-    migrar(banco);
+    await montarFormatoOriginal(banco);
+    await migrar(banco);
 
-    const contas = banco.prepare('SELECT * FROM usuarios ORDER BY id').all();
+    const contas = await todas(banco, 'SELECT * FROM usuarios ORDER BY id');
     assert.strictEqual(contas.length, 3, 'nenhuma conta pode sumir');
 
     const [victor, jorge, maria] = contas;
@@ -155,23 +165,22 @@ test('formato original: as 3 contas sobrevivem, cada uma com a credencial que ti
   }
 });
 
-test('formato original: partidas e pontos do ranking continuam intactos', () => {
+test('formato original: partidas e pontos do ranking continuam intactos', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    montarFormatoOriginal(banco);
-    migrar(banco);
+    await montarFormatoOriginal(banco);
+    await migrar(banco);
 
-    assert.strictEqual(banco.prepare('SELECT COUNT(*) AS n FROM partidas').get().n, 1);
-    assert.strictEqual(banco.prepare('SELECT COUNT(*) AS n FROM resultados').get().n, 3);
+    assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM partidas')).n, 1);
+    assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM resultados')).n, 3);
 
     // O ranking daquela semana continua batendo com quem jogou.
-    const tabela = banco
-      .prepare(
-        `SELECT u.apelido, SUM(r.pontos) AS pontos
-           FROM resultados r JOIN usuarios u ON u.id = r.usuario_id
-          WHERE r.semana = '2026-S32' GROUP BY u.id ORDER BY pontos DESC`
-      )
-      .all();
+    const tabela = await todas(
+      banco,
+      `SELECT u.apelido, SUM(r.pontos) AS pontos
+         FROM resultados r JOIN usuarios u ON u.id = r.usuario_id
+        WHERE r.semana = '2026-S32' GROUP BY u.id ORDER BY pontos DESC`
+    );
     assert.deepStrictEqual(
       tabela.map((l) => [l.apelido, l.pontos]),
       [['Victor', 2], ['Jorge', 1], ['Maria', 0]]
@@ -183,13 +192,13 @@ test('formato original: partidas e pontos do ranking continuam intactos', () => 
 
 // ============================================== formato estrito preservado
 
-test('formato estrito: as contas continuam, agora com espaço para e-mail e avatar', () => {
+test('formato estrito: as contas continuam, agora com espaço para e-mail', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    montarFormatoEstrito(banco);
-    migrar(banco);
+    await montarFormatoEstrito(banco);
+    await migrar(banco);
 
-    const contas = banco.prepare('SELECT * FROM usuarios ORDER BY id').all();
+    const contas = await todas(banco, 'SELECT * FROM usuarios ORDER BY id');
     assert.strictEqual(contas.length, 2);
 
     const victor = contas[0];
@@ -202,7 +211,7 @@ test('formato estrito: as contas continuam, agora com espaço para e-mail e avat
     assert.ok(victor.email_verificado_em, 'não faz sentido pedir confirmação de novo');
     assert.strictEqual(contas[1].senha_trocada_em, 1500, 'os carimbos de data seguem iguais');
 
-    assert.strictEqual(banco.prepare('SELECT COUNT(*) AS n FROM resultados').get().n, 2);
+    assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM resultados')).n, 2);
   } finally {
     apagar();
   }
@@ -210,40 +219,46 @@ test('formato estrito: as contas continuam, agora com espaço para e-mail e avat
 
 // ============================================================ a nova regra
 
-test('depois da migração, o mesmo e-mail não pode aparecer em duas contas', () => {
+test('depois da migração, o mesmo e-mail não pode aparecer em duas contas', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    migrar(banco);
-    const inserir = banco.prepare(
-      `INSERT INTO usuarios (id, apelido, apelido_chave, email_chave, criado_em, visto_em)
-       VALUES (?, ?, ?, ?, 1, 1)`
+    await migrar(banco);
+    const inserir = (id, apelido, chave) =>
+      banco.execute({
+        sql: `INSERT INTO usuarios (id, apelido, apelido_chave, email_chave, criado_em, visto_em)
+              VALUES (?, ?, ?, ?, 1, 1)`,
+        args: [id, apelido, chave, 'igual@gmail.com'],
+      });
+
+    await inserir('e1', 'Um', 'um');
+    const erro = await inserir('e2', 'Dois', 'dois').then(
+      () => null,
+      (e) => e
     );
-    inserir.run('e1', 'Um', 'um', 'igual@gmail.com');
-    assert.throws(() => inserir.run('e2', 'Dois', 'dois', 'igual@gmail.com'), /UNIQUE/i);
+    assert.match(String(erro && erro.message), /UNIQUE/i);
   } finally {
     apagar();
   }
 });
 
-test('apagar uma conta leva junto os tokens dela, e nada mais', () => {
+test('apagar uma conta leva junto os tokens dela, e nada mais', async () => {
   const { banco, apagar } = bancoTemporario();
   try {
-    migrar(banco);
-    banco
-      .prepare(
-        `INSERT INTO usuarios (id, apelido, apelido_chave, criado_em, visto_em)
-         VALUES ('u','Um','um',1,1)`
-      )
-      .run();
-    banco
-      .prepare(
-        `INSERT INTO tokens (hash, usuario_id, tipo, expira_em, criado_em)
-         VALUES ('abc','u','recuperar',9999999999999,1)`
-      )
-      .run();
+    await migrar(banco);
+    // A cascata so acontece com as chaves estrangeiras ligadas - e o servidor
+    // liga isso ao abrir o banco (ver abrir() em banco.js).
+    await banco.execute('PRAGMA foreign_keys = ON');
+    await banco.execute(
+      `INSERT INTO usuarios (id, apelido, apelido_chave, criado_em, visto_em)
+       VALUES ('u','Um','um',1,1)`
+    );
+    await banco.execute(
+      `INSERT INTO tokens (hash, usuario_id, tipo, expira_em, criado_em)
+       VALUES ('abc','u','recuperar',9999999999999,1)`
+    );
 
-    banco.prepare("DELETE FROM usuarios WHERE id = 'u'").run();
-    assert.strictEqual(banco.prepare('SELECT COUNT(*) AS n FROM tokens').get().n, 0);
+    await banco.execute("DELETE FROM usuarios WHERE id = 'u'");
+    assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM tokens')).n, 0);
   } finally {
     apagar();
   }

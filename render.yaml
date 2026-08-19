@@ -5,21 +5,12 @@ services:
   - type: web
     name: barbestial
     runtime: node
-    plan: starter # o plano free nao permite disco, e sem disco o ranking se perde
+    plan: free # o banco nao mora mais aqui, entao o disco descartavel do free
+               # deixou de ser um problema - ver o comentario do TURSO_URL
     region: virginia # o mais perto do Brasil entre os disponiveis
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /saude
-
-    # O BANCO PRECISA DE UM LUGAR QUE SOBREVIVA A REINICIOS.
-    # O disco abaixo e montado em /var/data e continua la depois de cada deploy.
-    # Sem ele, o arquivo do SQLite vive no sistema de arquivos temporario do
-    # container: funciona enquanto o servidor esta de pe e some no proximo
-    # deploy, levando junto as contas e o ranking.
-    disk:
-      name: dados
-      mountPath: /var/data
-      sizeGB: 1
 
     envVars:
       - key: NODE_VERSION
@@ -28,9 +19,20 @@ services:
       - key: NODE_ENV
         value: production
 
-      # Onde o SQLite guarda tudo. Tem que apontar para dentro do disco acima.
-      - key: BANCO_CAMINHO
-        value: /var/data/barbestial.db
+      # ONDE OS DADOS FICAM. Esta e a variavel mais importante do arquivo.
+      #
+      # O disco deste container e descartavel: some a cada deploy, a cada
+      # reinicio e a cada 15 minutos de hibernacao. Por isso o banco nao mora
+      # aqui - ele fica no Turso (SQLite hospedado, plano gratuito sem prazo).
+      # Sem TURSO_URL o servidor cai de volta para um arquivo local, que serve
+      # para desenvolver na sua maquina e NAO serve para producao.
+      #
+      # Os dois valores saem do painel do Turso. O token e um segredo: preencha
+      # no painel do Render (Environment), nunca aqui.
+      - key: TURSO_URL
+        sync: false
+      - key: TURSO_TOKEN
+        sync: false
 
       # Chave que assina os craches de sessao. generateValue faz o Render
       # sortear um valor forte e guardar - ele nunca aparece no repositorio.

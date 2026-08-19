@@ -24,7 +24,7 @@
 // uma chave valida circulando por ai.
 
 const crypto = require('crypto');
-const { abrir } = require('./banco');
+const banco = require('./banco');
 
 const VALIDADE = {
   verificar: 48 * 60 * 60 * 1000, // 2 dias
@@ -37,22 +37,23 @@ const embaralhar = (token) => crypto.createHash('sha256').update(String(token)).
 
 // Cria um token novo e derruba os anteriores do mesmo tipo.
 // Devolve o valor ORIGINAL - a unica vez que ele existe fora do e-mail.
-function criar(usuarioId, tipo, agora = Date.now()) {
+async function criar(usuarioId, tipo, agora = Date.now()) {
   if (!VALIDADE[tipo]) throw new Error(`tipo de token desconhecido: ${tipo}`);
 
   const token = crypto.randomBytes(32).toString('hex');
-  const banco = abrir();
 
-  banco.transaction(() => {
-    banco
-      .prepare('DELETE FROM tokens WHERE usuario_id = ? AND tipo = ?')
-      .run(usuarioId, tipo);
-    banco
-      .prepare(
-        'INSERT INTO tokens (hash, usuario_id, tipo, expira_em, criado_em) VALUES (?, ?, ?, ?, ?)'
-      )
-      .run(embaralhar(token), usuarioId, tipo, agora + VALIDADE[tipo], agora);
-  })();
+  // Apagar o anterior e criar o novo tem que ser um passo so: se ficasse pela
+  // metade, ou sobrariam dois links validos, ou nenhum.
+  await banco.transacao(async (tx) => {
+    await tx.execute({
+      sql: 'DELETE FROM tokens WHERE usuario_id = ? AND tipo = ?',
+      args: [usuarioId, tipo],
+    });
+    await tx.execute({
+      sql: 'INSERT INTO tokens (hash, usuario_id, tipo, expira_em, criado_em) VALUES (?, ?, ?, ?, ?)',
+      args: [embaralhar(token), usuarioId, tipo, agora + VALIDADE[tipo], agora],
+    });
+  });
 
   return token;
 }
@@ -60,22 +61,22 @@ function criar(usuarioId, tipo, agora = Date.now()) {
 // Consome o token e devolve o id do dono. Lanca quando o link nao vale mais.
 // As mensagens sao diferentes de proposito: "expirou" e "ja foi usado" sao
 // situacoes que a pessoa consegue resolver sozinha, e saber qual delas e ajuda.
-function consumir(token, tipo, agora = Date.now()) {
-  const banco = abrir();
-  const linha = banco
-    .prepare('SELECT * FROM tokens WHERE hash = ? AND tipo = ?')
-    .get(embaralhar(token || ''), tipo);
+async function consumir(token, tipo, agora = Date.now()) {
+  const linha = await banco.um('SELECT * FROM tokens WHERE hash = ? AND tipo = ?', [
+    embaralhar(token || ''),
+    tipo,
+  ]);
 
   if (!linha) throw new ErroDeToken('Este link não é válido. Peça um novo.');
   if (linha.usado_em) throw new ErroDeToken('Este link já foi usado. Peça um novo.');
   if (linha.expira_em < agora) throw new ErroDeToken('Este link expirou. Peça um novo.');
 
-  banco.prepare('UPDATE tokens SET usado_em = ? WHERE hash = ?').run(agora, linha.hash);
+  await banco.rodar('UPDATE tokens SET usado_em = ? WHERE hash = ?', [agora, linha.hash]);
   return linha.usuario_id;
 }
 
 // Faxina: tokens vencidos nao servem para nada e nao precisam ocupar espaco.
-const limparVencidos = (agora = Date.now()) =>
-  abrir().prepare('DELETE FROM tokens WHERE expira_em < ?').run(agora).changes;
+const limparVencidos = async (agora = Date.now()) =>
+  (await banco.rodar('DELETE FROM tokens WHERE expira_em < ?', [agora])).rowsAffected;
 
 module.exports = { criar, consumir, limparVencidos, ErroDeToken, VALIDADE };

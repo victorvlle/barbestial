@@ -113,6 +113,7 @@ const comSessao = (usuario) => ({
   usuario: usuarios.paraOCliente(usuario),
 });
 
+// Assincrona porque ler a sessao termina numa consulta ao banco (ver banco.js).
 function usuarioDoPedido(req) {
   const cabecalho = String(req.headers.authorization || '');
   const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7) : '';
@@ -123,7 +124,7 @@ function usuarioDoPedido(req) {
 // cadastro (a pessoa usa o botao de reenviar).
 async function mandarVerificacao(usuario) {
   if (!usuario.email) return;
-  const token = tokens.criar(usuario.id, 'verificar');
+  const token = await tokens.criar(usuario.id, 'verificar');
   await correio.enviarVerificacao(usuario, token);
 }
 
@@ -143,7 +144,7 @@ router.post(
   '/conta/criar',
   responder(comFreio(async (req) => {
     const { email, nome, senha } = req.body || {};
-    const usuario = usuarios.criarConta({ email, apelido: nome, senha });
+    const usuario = await usuarios.criarConta({ email, apelido: nome, senha });
     podeMandarEmail(usuario.email_chave);
     await mandarVerificacao(usuario);
     return comSessao(usuario);
@@ -154,16 +155,16 @@ router.post(
   '/conta/entrar',
   responder(comFreio(async (req) => {
     const { nome, senha } = req.body || {};
-    return comSessao(usuarios.entrarComSenha(nome, senha));
+    return comSessao(await usuarios.entrarComSenha(nome, senha));
   }))
 );
 
 // O LINK DO E-MAIL. Abre direto no navegador, entao responde com um redirecionamento
 // em vez de JSON - quem clica e uma pessoa, nao um programa.
-router.get('/conta/verificar', (req, res) => {
+router.get('/conta/verificar', async (req, res) => {
   try {
-    const usuarioId = tokens.consumir(req.query.t, 'verificar');
-    usuarios.marcarEmailVerificado(usuarioId);
+    const usuarioId = await tokens.consumir(req.query.t, 'verificar');
+    await usuarios.marcarEmailVerificado(usuarioId);
     res.redirect('/?verificado=1');
   } catch (erro) {
     console.warn('[conta] verificação recusada:', erro.message);
@@ -175,7 +176,7 @@ router.get('/conta/verificar', (req, res) => {
 router.post(
   '/conta/reenviar',
   responder(async (req) => {
-    const eu = usuarioDoPedido(req);
+    const eu = await usuarioDoPedido(req);
     if (!eu) throw new usuarios.ErroDeConta('Sessão expirada. Entre de novo.');
     if (usuarios.verificado(eu)) return { jaVerificado: true };
     if (!podeMandarEmail(eu.email_chave)) {
@@ -190,12 +191,12 @@ router.post(
 router.post(
   '/conta/trocar-email',
   responder(comFreio(async (req) => {
-    const eu = usuarioDoPedido(req);
+    const eu = await usuarioDoPedido(req);
     if (!eu) throw new usuarios.ErroDeConta('Sessão expirada. Entre de novo.');
     if (usuarios.verificado(eu)) {
       throw new usuarios.ErroDeConta('Seu e-mail já foi confirmado.');
     }
-    const atualizado = usuarios.trocarEmail(eu.id, (req.body || {}).email);
+    const atualizado = await usuarios.trocarEmail(eu.id, (req.body || {}).email);
     podeMandarEmail(atualizado.email_chave);
     await mandarVerificacao(atualizado);
     return { usuario: usuarios.paraOCliente(atualizado) };
@@ -212,10 +213,10 @@ router.post(
   '/conta/esqueci',
   responder(async (req) => {
     const email = String((req.body || {}).email || '').trim();
-    const usuario = email ? usuarios.porEmail(email) : null;
+    const usuario = email ? await usuarios.porEmail(email) : null;
 
     if (usuario && usuario.email && podeMandarEmail(`rec:${usuario.email_chave}`)) {
-      const token = tokens.criar(usuario.id, 'recuperar');
+      const token = await tokens.criar(usuario.id, 'recuperar');
       await correio.enviarRecuperacao(usuario, token);
     }
     return { mensagem: 'Se existir uma conta com esse e-mail, o link de recuperação está a caminho.' };
@@ -228,8 +229,8 @@ router.post(
   '/conta/redefinir',
   responder(comFreio(async (req) => {
     const { token, novaSenha } = req.body || {};
-    const usuarioId = tokens.consumir(token, 'recuperar');
-    return comSessao(usuarios.definirSenhaPorToken(usuarioId, novaSenha));
+    const usuarioId = await tokens.consumir(token, 'recuperar');
+    return comSessao(await usuarios.definirSenhaPorToken(usuarioId, novaSenha));
   }))
 );
 
@@ -237,35 +238,45 @@ router.post(
 router.post(
   '/conta/senha',
   responder(comFreio(async (req) => {
-    const eu = usuarioDoPedido(req);
+    const eu = await usuarioDoPedido(req);
     if (!eu) throw new usuarios.ErroDeConta('Sessão expirada. Entre de novo.');
     const { senhaAtual, novaSenha } = req.body || {};
-    usuarios.trocarSenha(eu.id, senhaAtual, novaSenha);
+    await usuarios.trocarSenha(eu.id, senhaAtual, novaSenha);
     return {};
   }))
 );
 
 // "Ainda estou logado?" - e o que o navegador pergunta ao abrir a pagina.
-router.get('/conta/eu', (req, res) => {
-  const usuario = usuarioDoPedido(req);
+router.get('/conta/eu', async (req, res) => {
+  const usuario = await usuarioDoPedido(req);
   if (!usuario) return res.status(401).json({ ok: false, erro: 'Sessão expirada.' });
   res.json({ ok: true, usuario: usuarios.paraOCliente(usuario) });
 });
 
 // Ranking. Publico de proposito: ver a classificacao nao exige estar logado, e
 // assim a tela de login ja pode mostrar quem esta ganhando a semana.
-router.get('/ranking', (req, res) => {
-  const semana = req.query.semana ? String(req.query.semana) : null;
-  const atual = ranking.semanaAtual();
-  res.json({
-    ok: true,
-    semana: semana ? { chave: semana } : atual,
-    ranking: ranking.rankingDaSemana(semana || atual.chave),
-  });
+router.get('/ranking', async (req, res) => {
+  try {
+    const semana = req.query.semana ? String(req.query.semana) : null;
+    const atual = ranking.semanaAtual();
+    res.json({
+      ok: true,
+      semana: semana ? { chave: semana } : atual,
+      ranking: await ranking.rankingDaSemana(semana || atual.chave),
+    });
+  } catch (erro) {
+    console.error('[ranking]', erro);
+    res.status(500).json({ ok: false, erro: 'Não foi possível ler o ranking.' });
+  }
 });
 
-router.get('/ranking/semanas', (_req, res) => {
-  res.json({ ok: true, semanas: ranking.semanasComPartidas() });
+router.get('/ranking/semanas', async (_req, res) => {
+  try {
+    res.json({ ok: true, semanas: await ranking.semanasComPartidas() });
+  } catch (erro) {
+    console.error('[ranking]', erro);
+    res.status(500).json({ ok: false, erro: 'Não foi possível ler o histórico.' });
+  }
 });
 
 module.exports = { router, usuarioDoPedido };
