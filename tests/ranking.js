@@ -140,6 +140,36 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
   await espera(700);
 
   check(await pagina.locator('#tela-login').isVisible(), 'a tela de login aparece para quem não entrou');
+
+  // O PRIMEIRO CONTATO COM O SITE.
+  //
+  // Isto aqui é um bug que aconteceu de verdade: a camada de login cobria tudo
+  // com um fundo opaco, e quem abria o site via um cartão de senha flutuando
+  // num vazio preto - sem o nome do jogo, sem nada. Parecia página quebrada.
+  const primeiraTela = await pagina.evaluate(() => {
+    const titulo = document.querySelector('.topo h1');
+    const login = document.querySelector('#tela-login');
+    const t = titulo.getBoundingClientRect();
+    // Quem está por cima naquele ponto da tela? Se for a camada de login, o
+    // título está escondido atrás dela.
+    const noPonto = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
+    return {
+      tituloVisivel: t.width > 0 && t.height > 0,
+      tituloPorCima: titulo.contains(noPonto) || noPonto === titulo,
+      texto: titulo.textContent.trim(),
+      recado: (document.querySelector('.login-recado') || {}).textContent || '',
+      loginPorCimaDoTitulo: login.contains(noPonto),
+    };
+  });
+  check(primeiraTela.texto === 'Bar Bestial', 'o título do jogo existe na página');
+  check(
+    primeiraTela.tituloPorCima && !primeiraTela.loginPorCimaDoTitulo,
+    'e aparece POR CIMA da tela de login - quem chega vê onde está'
+  );
+  check(
+    primeiraTela.recado.length > 30,
+    `com uma frase dizendo o que é o jogo ("${primeiraTela.recado.trim().slice(0, 42)}…")`
+  );
   // O estado vazio precisa ser conferido AGORA, antes de qualquer partida.
   check(
     (await pagina.textContent('#ranking-lista')).includes('Nenhuma partida'),
@@ -222,22 +252,83 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
   const lugar = await pagina.evaluate(() => {
     const r = document.querySelector('#ranking').getBoundingClientRect();
     const p = document.querySelector('#tela-entrada .painel').getBoundingClientRect();
+    const t = document.querySelector('.topo h1').getBoundingClientRect();
     return {
-      aEsquerda: r.right <= p.left + 1,
+      aDireita: r.left >= p.right - 1,
       dentroDaTela: r.left >= -1 && r.right <= innerWidth + 1,
       largura: Math.round(r.width),
-      altura: Math.round(r.height),
-      centroDaTela: Math.round(r.top + r.height / 2),
-      metadeDaJanela: Math.round(innerHeight / 2),
+      // O painel centralizado na tela, e logo abaixo do título.
+      centroDoPainel: Math.round(p.left + p.width / 2),
+      centroDaJanela: Math.round(innerWidth / 2),
+      distanciaDoTitulo: Math.round(p.top - t.bottom),
     };
   });
-  check(lugar.aEsquerda, 'o ranking fica à ESQUERDA do painel, sem cobrir nada');
+  check(lugar.aDireita, 'o ranking fica logo à DIREITA do painel, sem cobrir nada');
   check(lugar.dentroDaTela, `e cabe na tela (${lugar.largura}px de largura)`);
   check(lugar.largura >= 340, `é uma lista larga, não uma coluninha (${lugar.largura}px)`);
   check(
-    Math.abs(lugar.centroDaTela - lugar.metadeDaJanela) < 90,
-    'e fica centralizado na vertical, na altura dos olhos'
+    Math.abs(lugar.centroDoPainel - lugar.centroDaJanela) < 12,
+    `o painel do jogo fica no centro da tela (${lugar.centroDoPainel} vs ${lugar.centroDaJanela})`
   );
+  check(
+    lugar.distanciaDoTitulo < 60,
+    `e logo abaixo do título (${lugar.distanciaDoTitulo}px de distância)`
+  );
+
+  // ============================ a coluna da esquerda
+  //
+  // A vitrine existe para ensinar os 12 poderes sem ninguém abrir "Instruções",
+  // e as marcas para dar motivo de voltar quando o ranking está vazio.
+  const vitrine = await pagina.evaluate(async () => {
+    const { animais } = await fetch('/api/animais').then((r) => r.json());
+    const pontos = document.querySelectorAll('.vitrine-ponto');
+    const antes = document.getElementById('vitrine-nome').textContent;
+
+    // Clicar no primeiro pontinho leva à primeira carta do catálogo.
+    pontos[0].click();
+    await new Promise((r) => setTimeout(r, 320));
+
+    return {
+      quantosPontos: pontos.length,
+      quantosAnimais: animais.length,
+      antes,
+      nome: document.getElementById('vitrine-nome').textContent,
+      esperado: animais[0].nome,
+      forca: document.getElementById('vitrine-forca').textContent,
+      forcaEsperada: String(animais[0].forca),
+      poder: document.getElementById('vitrine-poder').textContent,
+      arte: document.getElementById('vitrine-arte').getAttribute('src'),
+      visivel: Boolean(document.getElementById('vitrine').offsetParent),
+      girando: typeof vitrineRelogio === 'object' || typeof vitrineRelogio === 'number',
+    };
+  });
+  check(vitrine.visivel, 'a vitrine das cartas aparece na coluna da esquerda');
+  check(
+    vitrine.quantosPontos === vitrine.quantosAnimais,
+    `com um ponto por animal (${vitrine.quantosPontos} de ${vitrine.quantosAnimais})`
+  );
+  check(vitrine.nome === vitrine.esperado, `clicar num ponto troca a carta (${vitrine.nome})`);
+  check(vitrine.forca === vitrine.forcaEsperada, `mostrando a força certa (${vitrine.forca})`);
+  check(vitrine.poder.length > 20, `e o poder por extenso ("${vitrine.poder.slice(0, 40)}…")`);
+  check(
+    vitrine.arte === `/assets/cartas/${'' + vitrine.esperado.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '')}.webp`
+      || /^\/assets\/cartas\/[a-z]+\.webp$/.test(vitrine.arte),
+    `usando a arte que a mesa já usa (${vitrine.arte})`
+  );
+  check(vitrine.girando, 'e ela troca sozinha, sem ninguém clicar');
+
+  const marcas = await pagina.evaluate(() => ({
+    visivel: Boolean(document.getElementById('estatisticas').offsetParent),
+    partidas: document.getElementById('estat-partidas').textContent,
+    recado: document.getElementById('estat-recado').textContent,
+  }));
+  check(marcas.visivel, 'o bloco "suas marcas" aparece para quem entrou');
+  check(/^\d+$/.test(marcas.partidas), `com o número de partidas (${marcas.partidas})`);
+  check(marcas.recado.length > 10, `e uma frase de acordo com a situação ("${marcas.recado}")`);
+
+  const marcasSemCracha = await fetch(`${url}/api/conta/estatisticas`);
+  check(marcasSemCracha.status === 401, 'as marcas de alguém exigem crachá - ninguém vê as do outro');
 
   // ============================ o visual da lista
   // O ranking é o que faz alguém querer jogar mais uma. Estas checagens são de

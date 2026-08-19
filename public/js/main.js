@@ -446,6 +446,7 @@ aoApertarEnter('login-senha', 'btn-login');
 aoApertarEnter('nova-senha', 'btn-criar-conta');
 
 carregarCatalogo();
+iniciarVitrine();
 carregarMusica();
 pintarBotaoMudo();
 iniciarPalco();

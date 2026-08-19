@@ -12,6 +12,7 @@
 //   POST /conta/entrar  apelido OU e-mail + senha
 //   POST /conta/senha   estando logado, troca a senha
 //   GET  /conta/eu      "ainda estou logado?"
+//   GET  /conta/estatisticas  as marcas de quem esta logado
 //
 // NAO EXISTE RECUPERACAO AUTOMATICA, e isso e uma decisao, nao um esquecimento.
 // Recuperar senha sozinho exige mandar e-mail, e o servidor gratuito onde o
@@ -142,6 +143,19 @@ router.get('/conta/eu', async (req, res) => {
   const usuario = await usuarioDoPedido(req);
   if (!usuario) return res.status(401).json({ ok: false, erro: 'Sessão expirada.' });
   res.json({ ok: true, usuario: usuarios.paraOCliente(usuario) });
+});
+
+// As marcas de quem esta logado, para o painel do menu. Exige cracha: sao os
+// numeros DA PESSOA, e ninguem precisa ver os de outra.
+router.get('/conta/estatisticas', async (req, res) => {
+  try {
+    const eu = await usuarioDoPedido(req);
+    if (!eu) return res.status(401).json({ ok: false, erro: 'Sessão expirada.' });
+    res.json({ ok: true, estatisticas: await ranking.estatisticasDe(eu.id) });
+  } catch (erro) {
+    console.error('[estatisticas]', erro);
+    res.status(500).json({ ok: false, erro: 'Não foi possível ler suas marcas.' });
+  }
 });
 
 // Ranking. Publico de proposito: ver a classificacao nao exige estar logado, e

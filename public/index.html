@@ -52,24 +52,15 @@
 
       <p class="aviso" id="aviso-login"></p>
     </div>
+
+    <p class="login-recado">
+      Um jogo de cartas rápido para <strong>2 a 4 pessoas</strong>, na mesma sala
+      ou cada um na sua casa. Crie a conta e jogue na hora — leva 10 segundos.
+    </p>
   </div>
 
   <!-- TELA 1: entrada -->
   <section class="tela" id="tela-entrada">
-
-    <!-- O ranking vem ANTES do painel no HTML porque ele fica à esquerda na
-         tela. Esta é a tela do menu; durante a partida ele nem aparece. -->
-    <aside class="ranking" id="ranking">
-      <header class="ranking-topo">
-        <h2>🏆 Ranking da semana</h2>
-        <p class="ranking-periodo" id="ranking-periodo"></p>
-      </header>
-      <ol class="ranking-lista" id="ranking-lista"></ol>
-      <p class="ranking-regra">
-        Vitória vale mais em mesa cheia: 5/3/2/1 com 4 jogadores,
-        2/1/0 com 3 e 1/0 com 2. Zera toda segunda-feira.
-      </p>
-    </aside>
 
     <div class="painel">
       <p class="quem">
@@ -100,6 +91,54 @@
         <button id="btn-instrucoes" class="secundario">Instruções</button>
       </div>
     </div>
+
+    <!-- A coluna da esquerda: a vitrine das cartas e as marcas de quem entrou.
+         Existe para equilibrar a tela, mas não é enfeite - a vitrine ensina os
+         12 poderes sem ninguém abrir as instruções, e as marcas dão motivo
+         para voltar quando o ranking ainda está vazio. -->
+    <aside class="lateral">
+      <section class="vitrine escondida" id="vitrine">
+        <h2>Conheça os animais</h2>
+
+        <div class="vitrine-palco">
+          <img class="vitrine-arte" id="vitrine-arte" alt="" draggable="false" />
+        </div>
+
+        <p class="vitrine-nome">
+          <span id="vitrine-nome">—</span>
+          <span class="vitrine-forca" id="vitrine-forca">0</span>
+        </p>
+        <p class="vitrine-poder" id="vitrine-poder"></p>
+
+        <div class="vitrine-pontos" id="vitrine-pontos"></div>
+      </section>
+
+      <section class="estatisticas escondida" id="estatisticas">
+        <h2>Suas marcas</h2>
+        <div class="estat-grade">
+          <div class="estat"><strong id="estat-partidas">0</strong><span>partidas</span></div>
+          <div class="estat"><strong id="estat-vitorias">0</strong><span>vitórias</span></div>
+          <div class="estat"><strong id="estat-semana">0</strong><span>pts na semana</span></div>
+          <div class="estat"><strong id="estat-posicao">—</strong><span>posição</span></div>
+        </div>
+        <p class="estat-recado" id="estat-recado"></p>
+      </section>
+    </aside>
+
+    <!-- Ranking da semana, logo à direita do menu. Esta é a tela do menu;
+         durante a partida ele nem aparece. -->
+    <aside class="ranking" id="ranking">
+      <header class="ranking-topo">
+        <h2>🏆 Ranking da semana</h2>
+        <p class="ranking-periodo" id="ranking-periodo"></p>
+      </header>
+      <ol class="ranking-lista" id="ranking-lista"></ol>
+      <p class="ranking-regra">
+        Vitória vale mais em mesa cheia: 5/3/2/1 com 4 jogadores,
+        2/1/0 com 3 e 1/0 com 2. Zera toda segunda-feira.
+      </p>
+    </aside>
+
 
   </section>
 
@@ -243,6 +282,7 @@
        arquivos abaixo só usam as variáveis de main.js dentro de funções, que
        rodam depois — por isso a ordem funciona nos dois sentidos. -->
   <script src="/js/ranking.js"></script>
+  <script src="/js/vitrine.js"></script>
   <script src="/js/conta.js"></script>
   <script src="/js/main.js"></script>
 </body>

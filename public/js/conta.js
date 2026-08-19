@@ -47,6 +47,7 @@ function aoEntrar({ token, usuario }) {
   if (!socket.connected) socket.connect();
   mostrarTela('entrada');
   carregarRanking();
+  carregarEstatisticas();
 }
 
 function sair() {
@@ -56,6 +57,7 @@ function sair() {
   salaAtual = null;
   estadoAtual = null;
   if (socket.connected) socket.disconnect();
+  carregarEstatisticas(); // sem conta, o bloco de marcas se esconde sozinho
   $('tela-login').classList.remove('escondida');
   for (const tela of document.querySelectorAll('.tela')) tela.classList.add('escondida');
   irPara('entrar');

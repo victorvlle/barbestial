@@ -221,6 +221,46 @@ const semanasComPartidas = () =>
     'SELECT semana, COUNT(*) AS partidas FROM partidas GROUP BY semana ORDER BY semana DESC'
   );
 
+// AS MARCAS DE UMA PESSOA, para o painel do menu.
+//
+// Tres recortes, porque respondem perguntas diferentes: o total ("quanto eu ja
+// joguei"), a semana ("como estou agora") e a melhor posicao ja alcancada ("do
+// que eu sou capaz"). Sem nada disso, quem abre o jogo sozinho nao tem nenhum
+// motivo para voltar - o ranking so fala de quem esta na frente.
+async function estatisticasDe(usuarioId, chave = chaveDaSemana()) {
+  const vazio = { partidas: 0, vitorias: 0, pontos: 0 };
+  if (!usuarioId) return { total: vazio, semana: vazio, melhorPosicao: null, posicaoNaSemana: null };
+
+  const contar = async (filtro, argumentos) =>
+    (await banco.um(
+      `SELECT COUNT(*) AS partidas,
+              COALESCE(SUM(pontos), 0) AS pontos,
+              COALESCE(SUM(CASE WHEN posicao = 1 THEN 1 ELSE 0 END), 0) AS vitorias
+         FROM resultados
+        WHERE usuario_id = ?${filtro}`,
+      argumentos
+    )) || vazio;
+
+  const total = await contar('', [usuarioId]);
+  const semana = await contar(' AND semana = ?', [usuarioId, chave]);
+  const melhor = await banco.um('SELECT MIN(posicao) AS melhor FROM resultados WHERE usuario_id = ?', [
+    usuarioId,
+  ]);
+
+  // A posicao desta semana sai da MESMA consulta que desenha o ranking, para as
+  // duas telas nunca discordarem sobre em que lugar a pessoa esta.
+  const tabela = await rankingDaSemana(chave);
+  const minhaLinha = tabela.find((l) => l.id === usuarioId);
+
+  return {
+    total,
+    semana,
+    melhorPosicao: melhor && melhor.melhor ? melhor.melhor : null,
+    posicaoNaSemana: minhaLinha ? minhaLinha.posicao : null,
+    deQuantos: tabela.length,
+  };
+}
+
 // As ultimas partidas de um jogador - materia-prima para uma futura tela de perfil.
 const partidasDoUsuario = (usuarioId, limite = 20) =>
   banco.tudo(
@@ -242,5 +282,6 @@ module.exports = {
   registrarPartida,
   rankingDaSemana,
   semanasComPartidas,
+  estatisticasDe,
   partidasDoUsuario,
 };
