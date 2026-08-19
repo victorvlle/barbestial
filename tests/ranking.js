@@ -170,6 +170,36 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
     primeiraTela.recado.length > 30,
     `com uma frase dizendo o que é o jogo ("${primeiraTela.recado.trim().slice(0, 42)}…")`
   );
+  // O MENU NÃO PODE PISCAR ANTES DO LOGIN.
+  //
+  // Bug real: o menu do jogo ("Jogando como —", "Criar uma sala") aparecia por
+  // um instante e só depois a tela de login entrava por cima, porque a decisão
+  // dependia de uma resposta do servidor. Num servidor que hiberna, essa
+  // piscada durava segundos. Aqui as rotas de conta são atrasadas de propósito:
+  // mesmo com o servidor lento, o menu não pode aparecer para quem não entrou.
+  const paginaLenta = await contexto.newPage();
+  await paginaLenta.route('**/api/conta/**', async (rota) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await rota.continue();
+  });
+  await paginaLenta.goto(url);
+  await espera(400); // o servidor ainda está "pensando"
+
+  const durante = await paginaLenta.evaluate(() => ({
+    menuVisivel: Boolean(document.getElementById('tela-entrada').offsetParent),
+    textoNaTela: document.body.innerText,
+  }));
+  // A camada de login é `position: fixed`, e para esses elementos o offsetParent
+  // é sempre nulo - por isso a visibilidade dela vem do próprio navegador.
+  durante.loginVisivel = await paginaLenta.locator('#tela-login').isVisible();
+  check(!durante.menuVisivel, 'com o servidor lento, o menu do jogo NÃO pisca na tela');
+  check(durante.loginVisivel, 'e a tela de login já está lá, sem esperar resposta nenhuma');
+  check(
+    !durante.textoNaTela.includes('Criar uma sala'),
+    'nada de "Criar uma sala" antes de a pessoa entrar'
+  );
+  await paginaLenta.close();
+
   // O estado vazio precisa ser conferido AGORA, antes de qualquer partida.
   check(
     (await pagina.textContent('#ranking-lista')).includes('Nenhuma partida'),
@@ -329,6 +359,55 @@ const buscarRanking = () => fetch(`${url}/api/ranking`).then((r) => r.json());
 
   const marcasSemCracha = await fetch(`${url}/api/conta/estatisticas`);
   check(marcasSemCracha.status === 401, 'as marcas de alguém exigem crachá - ninguém vê as do outro');
+
+  // ============================ cabe na tela, em qualquer monitor
+  //
+  // Nada de rolagem no menu: informação abaixo da dobra é informação que não
+  // existe, e a barra de rolagem ainda desloca o painel do centro da tela.
+  for (const tela of [
+    { nome: 'notebook pequeno', w: 1280, h: 720 },
+    { nome: 'notebook comum', w: 1366, h: 768 },
+    { nome: 'janela baixa', w: 1440, h: 620 },
+  ]) {
+    await pagina.setViewportSize({ width: tela.w, height: tela.h });
+    await espera(400);
+    const m = await pagina.evaluate(() => {
+      const menu = document.getElementById('tela-entrada');
+      const img = document.getElementById('vitrine-arte');
+      const palco = document.querySelector('.vitrine-palco').getBoundingClientRect();
+      const arte = img.getBoundingClientRect();
+      return {
+        rolagemDaPagina: document.documentElement.scrollHeight - innerHeight,
+        rolagemDoMenu: menu.scrollHeight - menu.clientHeight,
+        carteiraCortada: arte.height > palco.height + 1 || arte.width > palco.width + 1,
+        proporcaoIntacta: img.naturalWidth
+          ? Math.abs(arte.width / arte.height - img.naturalWidth / img.naturalHeight) < 0.05
+          : true,
+        arte: `${Math.round(arte.width)}x${Math.round(arte.height)}`,
+      };
+    });
+    check(m.rolagemDaPagina <= 0, `${tela.nome} (${tela.w}x${tela.h}): a página não rola`);
+    check(m.rolagemDoMenu <= 0, `${tela.nome}: o menu inteiro cabe na tela`);
+    check(!m.carteiraCortada, `${tela.nome}: a carta aparece inteira (${m.arte})`);
+    check(m.proporcaoIntacta, `${tela.nome}: sem esticar nem achatar a arte`);
+  }
+  await pagina.setViewportSize({ width: 1366, height: 800 });
+  await espera(400);
+
+  // As marcas ficam embaixo do painel do meio, com a mesma largura dele.
+  const alinhamento = await pagina.evaluate(() => {
+    const painel = document.querySelector('.centro .painel').getBoundingClientRect();
+    const marcas = document.getElementById('estatisticas').getBoundingClientRect();
+    return {
+      mesmaEsquerda: Math.abs(painel.left - marcas.left) < 2,
+      mesmaLargura: Math.abs(painel.width - marcas.width) < 2,
+      abaixo: marcas.top >= painel.bottom - 1,
+    };
+  });
+  check(
+    alinhamento.mesmaEsquerda && alinhamento.mesmaLargura && alinhamento.abaixo,
+    'o bloco de marcas fica embaixo do painel central, alinhado com ele'
+  );
 
   // ============================ o visual da lista
   // O ranking é o que faz alguém querer jogar mais uma. Estas checagens são de

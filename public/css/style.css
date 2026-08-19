@@ -1031,6 +1031,21 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    Cobre a tela inteira em vez de ser mais uma ".tela": enquanto ela estiver
    aberta nao existe jogo nenhum atras, e assim nenhum clique escapa para uma
    tela que a pessoa ainda nao deveria estar usando. */
+/* A ESPERA. Aparece só no instante entre abrir a página e o navegador saber se
+   existe sessão salva. Uma bolinha girando, sem texto: é rápido demais para
+   alguém ler qualquer coisa. */
+.espera {
+  position: fixed; inset: 0; z-index: 65;
+  display: grid; place-items: center;
+  background: var(--noite);
+}
+.espera-bola {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid rgba(242, 177, 52, .22); border-top-color: var(--neon);
+  animation: girando .8s linear infinite;
+}
+@keyframes girando { to { transform: rotate(360deg); } }
+
 .login {
   position: fixed; inset: 0; z-index: 60;
   display: grid; place-items: center;
@@ -1106,21 +1121,39 @@ button:disabled { opacity: .4; cursor: not-allowed; }
    ela, o ranking empurraria tudo para o lado. */
 #tela-entrada {
   grid-template-columns: 1fr auto 1fr;
-  align-items: start; justify-items: center;
+  /* Uma linha só, com altura DEFINIDA (o que sobrou da janela). É isso que
+     permite às colunas se encolherem por dentro - sem uma altura definida aqui,
+     a linha cresce com o conteúdo e a arte da carta nunca diminui. */
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch; justify-items: center;
   gap: 1.4rem;
-  padding-top: .8rem;
+  padding: .8rem 1rem 1rem;
+  /* TUDO PRECISA CABER NA TELA, em qualquer monitor. A altura é fixa (a janela
+     menos o cabeçalho) e as colunas se ajustam dentro dela: a vitrine encolhe a
+     arte, o ranking rola por dentro. Barra de rolagem na página inteira
+     desalinha o menu do centro, além de esconder informação abaixo da dobra. */
+  overflow: hidden;
+  min-height: 0;
 }
 /* As três colunas ficam na MESMA linha. Sem dizer isto, o navegador empilha:
    como cada bloco pede uma coluna fixa e o painel vem antes no HTML, os outros
    dois iam parar numa segunda linha, bem abaixo do menu. */
-#tela-entrada .painel { grid-column: 2; grid-row: 1; }
+/* A COLUNA DO MEIO: o painel do jogo e, logo abaixo, as marcas de quem entrou -
+   as duas com a mesma largura, alinhadas uma com a outra. */
+.centro {
+  grid-column: 2; grid-row: 1; align-self: start;
+  width: min(420px, 100%); max-height: 100%;
+  display: flex; flex-direction: column; gap: 1rem;
+  min-height: 0; overflow-y: auto;
+}
+#tela-entrada .painel { width: 100%; margin: 0; }
 
 /* O RANKING.
    Logo à direita do painel, alto e largo: é o placar da semana, e é ele que dá
    vontade de jogar mais uma. */
 .ranking {
-  grid-column: 3; grid-row: 1; justify-self: start;
-  width: min(400px, 100%); max-height: min(78vh, 620px);
+  grid-column: 3; grid-row: 1; justify-self: start; align-self: start;
+  width: min(400px, 100%); max-height: 100%; min-height: 0;
   display: flex; flex-direction: column;
   padding: 1.3rem 1.4rem; border-radius: 20px;
   background: linear-gradient(180deg, #2a2112 0%, #191f2b 42%);
@@ -1205,8 +1238,9 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 
 .lateral {
   grid-column: 1; grid-row: 1; justify-self: end;
-  width: min(330px, 100%);
+  width: min(330px, 100%); height: 100%;
   display: flex; flex-direction: column; gap: 1rem;
+  min-height: 0;
 }
 
 .vitrine, .estatisticas {
@@ -1215,20 +1249,30 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   border: 1px solid var(--borda);
   box-shadow: 0 20px 44px rgba(0, 0, 0, .45);
 }
+.vitrine { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+
 .vitrine h2, .estatisticas h2 {
   margin: 0 0 .8rem; font-size: .82rem; letter-spacing: .1em;
   text-transform: uppercase; color: var(--suave);
 }
 
-/* O palco tem altura fixa: sem isso a coluna inteira pula de tamanho a cada
-   troca de carta, porque as artes não têm todas a mesma proporção. */
+/* O PALCO DA CARTA.
+   Ele ESTICA para ocupar a altura que sobrar na coluna (flex: 1) e a arte usa
+   `contain`: a carta aparece inteira, sempre, seja qual for o tamanho da tela.
+   Antes o palco tinha altura fixa e a carta ficava cortada em monitor menor. */
+/* FLEX, e não grid, para centralizar a carta. A diferença importa: num grid, a
+   linha implícita tem tamanho automático e o `max-height: 100%` da imagem passa
+   a valer contra a altura NATURAL dela - ou seja, não limita nada, e a carta
+   vazava para fora do palco. No flex, os 100% valem contra o palco de verdade. */
 .vitrine-palco {
-  height: 190px; display: grid; place-items: center;
+  flex: 1 1 0; min-height: 90px;
+  display: flex; align-items: center; justify-content: center;
   border-radius: 12px; overflow: hidden;
   background: radial-gradient(120% 90% at 50% 15%, rgba(242, 177, 52, .12), transparent 70%), #10141d;
 }
 .vitrine-arte {
-  max-height: 100%; max-width: 100%; object-fit: contain;
+  max-height: 100%; max-width: 100%; width: auto; height: auto;
+  object-fit: contain;
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .55));
   transition: opacity .18s ease, transform .18s ease;
 }
@@ -1245,7 +1289,12 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   border-radius: 50%; background: var(--neon); color: #23180a;
   font-size: .85rem; font-weight: 800;
 }
-.vitrine-poder { margin: 0; font-size: .8rem; line-height: 1.55; color: var(--suave); min-height: 3.6em; }
+.vitrine-poder {
+  margin: 0; font-size: .8rem; line-height: 1.5; color: var(--suave);
+  /* Três linhas no máximo: o poder mais comprido não pode empurrar a carta
+     para fora da tela numa janela baixa. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 
 .vitrine-pontos { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .9rem; }
 .vitrine-ponto {
@@ -1256,24 +1305,57 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .vitrine-ponto--ativo { background: var(--neon); transform: scale(1.35); }
 
 /* --------------------------------------------------------- suas marcas */
-.estat-grade { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.estat-grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; }
 .estat {
   display: flex; flex-direction: column; align-items: center; gap: .1rem;
   padding: .6rem .3rem; border-radius: 11px;
   background: #12161f; border: 1px solid var(--borda);
 }
-.estat strong { font-size: 1.4rem; font-weight: 800; color: var(--neon); font-variant-numeric: tabular-nums; }
-.estat span { font-size: .68rem; color: var(--suave); text-align: center; }
+.estat strong { font-size: 1.25rem; font-weight: 800; color: var(--neon); font-variant-numeric: tabular-nums; }
+.estat span { font-size: .66rem; color: var(--suave); text-align: center; white-space: nowrap; }
 .estat-recado { margin: .8rem 0 0; font-size: .74rem; line-height: 1.5; color: var(--suave); }
 
 /* Telas estreitas: tudo desce para uma coluna só, em vez de espremer três lado
    a lado. A ordem é a do jogo primeiro: menu, ranking, e depois o resto. */
+/* JANELAS BAIXAS (notebook de tela pequena, navegador com muita barra aberta).
+   Tudo aperta um pouco em vez de estourar para fora da tela. */
+@media (max-height: 780px) {
+  #tela-entrada { gap: 1rem; padding-top: .5rem; }
+  .painel { padding: 1.1rem 1.2rem; }
+  .centro { gap: .7rem; }
+  .opcoes { margin-top: .6rem; gap: .35rem; }
+  .vitrine, .estatisticas { padding: .85rem 1rem; }
+  .vitrine h2, .estatisticas h2 { margin-bottom: .5rem; }
+  .vitrine-nome { margin: .6rem 0 .25rem; }
+  .estat { padding: .45rem .3rem; }
+  .estat strong { font-size: 1.1rem; }
+  .estat-recado { margin-top: .55rem; }
+  .ranking { padding: 1rem 1.1rem; }
+}
+
+/* Telas estreitas: as três colunas viram uma só. Aqui a rolagem volta a ser
+   permitida - não existe layout que caiba três blocos numa tela de celular. */
 @media (max-width: 1250px) {
-  #tela-entrada { grid-template-columns: 1fr; gap: 1.1rem; }
-  #tela-entrada .painel, .ranking, .lateral { grid-column: 1; grid-row: auto; justify-self: center; }
-  #tela-entrada .painel { order: 1; }
-  .ranking { order: 2; width: min(460px, 100%); max-height: none; }
-  .lateral { order: 3; width: min(460px, 100%); }
+  /* EMPILHADO VIRA FLEX, e não grid de uma coluna. Com grid, as faixas
+     continuavam sendo dimensionadas pelas regras da tela larga e o painel do
+     meio vazava por cima do ranking - roubando os cliques dos botões. Em
+     coluna, cada bloco ocupa exatamente a altura que precisa, na ordem certa. */
+  #tela-entrada {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 1.1rem; overflow-y: auto; height: calc(100vh - 70px);
+  }
+  .lateral { height: auto; }
+  .vitrine-palco { min-height: 300px; }
+  /* Linha explícita para cada bloco. Com `grid-row: auto` + `order`, o
+     navegador dimensionava as faixas na ordem do HTML e a do meio ficava menor
+     que o conteúdo - o painel vazava por cima do ranking e roubava os cliques. */
+  /* align-self: center anula o `start` da tela larga - em coluna, esse `start`
+     encostaria os blocos na esquerda. */
+  .centro, .ranking, .lateral {
+    width: min(460px, 100%); flex: 0 0 auto; align-self: center;
+  }
+  .centro { max-height: none; overflow: visible; }
+  .ranking { max-height: none; }
 }
 
 

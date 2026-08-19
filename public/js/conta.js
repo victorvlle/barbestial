@@ -42,6 +42,7 @@ function aoEntrar({ token, usuario }) {
 
   $('quem-sou').textContent = usuario.nome;
   $('quem-sou').title = usuario.email || '';
+  $('espera').classList.add('escondida');
   $('tela-login').classList.add('escondida');
 
   if (!socket.connected) socket.connect();
@@ -88,21 +89,40 @@ async function criarConta() {
 
 // ------------------------------------------------------------- inicialização
 
+// QUAL TELA MOSTRAR NO PRIMEIRO INSTANTE.
+//
+// Isto aqui era um bug feio: o menu do jogo aparecia por um segundo e só depois
+// a tela de login entrava por cima - porque a decisão dependia de uma resposta
+// do servidor, e num servidor lento (o plano gratuito hiberna) essa piscada
+// durava vários segundos.
+//
+// A correção: o HTML começa com TUDO escondido, e quem decide é o crachá
+// guardado no navegador, que não depende de rede nenhuma. Sem crachá, a tela de
+// login aparece na hora. Com crachá, fica uma espera discreta até o servidor
+// confirmar - e aí entra direto no jogo, sem piscar login no meio.
+function mostrarLogin() {
+  $('espera').classList.add('escondida');
+  irPara('entrar');
+  $('tela-login').classList.remove('escondida');
+}
+
 async function iniciarContas() {
-  const config = await pedir('/api/conta/config');
-  if (config.ok) configDeLogin = config;
+  const temCracha = Boolean(sessao.ler());
+  if (!temCracha) mostrarLogin(); // decisão instantânea, sem esperar o servidor
 
   // O ranking aparece antes do login: dá para ver quem está ganhando a semana
   // sem entrar em conta nenhuma.
   carregarRanking();
 
-  if (sessao.ler()) {
+  const config = await pedir('/api/conta/config');
+  if (config.ok) configDeLogin = config;
+
+  if (temCracha) {
     const r = await pedir('/api/conta/eu');
     if (r.ok) return aoEntrar({ token: sessao.ler(), usuario: r.usuario });
     sessao.apagar(); // crachá vencido: cai para a tela de login sem drama
+    mostrarLogin();
   }
-  irPara('entrar');
-  $('tela-login').classList.remove('escondida');
 }
 
 // ------------------------------------------------------------------ botões

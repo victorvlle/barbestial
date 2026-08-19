@@ -452,8 +452,9 @@ pintarBotaoMudo();
 iniciarPalco();
 $('opt-previa').checked = preferencias.previaLigada();
 $('opt-holo').checked = preferencias.holoLigado();
-mostrarTela('entrada');
 
-// Por ultimo: descobre se ja ha uma sessao guardada e decide entre a tela de
-// login e o menu. Tudo o que vem antes so prepara a pagina.
+// Repare que NINGUEM mostra o menu aqui. Quem decide qual tela aparece e
+// iniciarContas(), logo abaixo - antes disso a pagina fica na tela de espera.
+// Chamar mostrarTela('entrada') neste ponto era o que fazia o menu do jogo
+// piscar na frente de quem ainda nem tinha entrado na conta.
 iniciarContas();

@@ -15,6 +15,12 @@
     <button id="btn-ajuda" class="redondo" title="Instruções do jogo">?</button>
   </header>
 
+  <!-- ESPERA: o que aparece no primeiro instante, antes de o navegador saber se
+       existe uma sessão salva. Sem isto, o menu do jogo (que fica logo abaixo no
+       HTML) piscava na tela por um segundo antes da tela de login entrar por
+       cima - e num servidor lento esse "piscar" durava bem mais que um segundo. -->
+  <div class="espera" id="espera"><span class="espera-bola"></span></div>
+
   <!-- TELA 0: login. Fica por cima de tudo até a pessoa entrar na conta. -->
   <div class="login escondida" id="tela-login">
     <div class="painel painel--login">
@@ -60,9 +66,10 @@
   </div>
 
   <!-- TELA 1: entrada -->
-  <section class="tela" id="tela-entrada">
+  <section class="tela escondida" id="tela-entrada">
 
-    <div class="painel">
+    <div class="centro">
+      <div class="painel">
       <p class="quem">
         <span>Jogando como <strong id="quem-sou">—</strong></span>
         <button id="btn-sair-conta" class="fantasma">sair</button>
@@ -92,10 +99,20 @@
       </div>
     </div>
 
-    <!-- A coluna da esquerda: a vitrine das cartas e as marcas de quem entrou.
-         Existe para equilibrar a tela, mas não é enfeite - a vitrine ensina os
-         12 poderes sem ninguém abrir as instruções, e as marcas dão motivo
-         para voltar quando o ranking ainda está vazio. -->
+      <section class="estatisticas escondida" id="estatisticas">
+        <h2>Suas marcas</h2>
+        <div class="estat-grade">
+          <div class="estat"><strong id="estat-partidas">0</strong><span>partidas</span></div>
+          <div class="estat"><strong id="estat-vitorias">0</strong><span>vitórias</span></div>
+          <div class="estat"><strong id="estat-semana">0</strong><span>pts semana</span></div>
+          <div class="estat"><strong id="estat-posicao">—</strong><span>posição</span></div>
+        </div>
+        <p class="estat-recado" id="estat-recado"></p>
+      </section>
+    </div>
+
+    <!-- A coluna da esquerda. Não é enfeite: a vitrine ensina os 12 poderes
+         sem ninguém precisar abrir as instruções. -->
     <aside class="lateral">
       <section class="vitrine escondida" id="vitrine">
         <h2>Conheça os animais</h2>
@@ -111,17 +128,6 @@
         <p class="vitrine-poder" id="vitrine-poder"></p>
 
         <div class="vitrine-pontos" id="vitrine-pontos"></div>
-      </section>
-
-      <section class="estatisticas escondida" id="estatisticas">
-        <h2>Suas marcas</h2>
-        <div class="estat-grade">
-          <div class="estat"><strong id="estat-partidas">0</strong><span>partidas</span></div>
-          <div class="estat"><strong id="estat-vitorias">0</strong><span>vitórias</span></div>
-          <div class="estat"><strong id="estat-semana">0</strong><span>pts na semana</span></div>
-          <div class="estat"><strong id="estat-posicao">—</strong><span>posição</span></div>
-        </div>
-        <p class="estat-recado" id="estat-recado"></p>
       </section>
     </aside>
 
