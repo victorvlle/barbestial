@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 
 const registrarHandlers = require('./socket/handlers');
 const { ANIMAIS, REGRAS } = require('./game/cards');
+const festas = require('./game/festas');
 const { salas } = require('./game/room');
 const { abrir } = require('./dados/banco');
 const { lerSessao, paraOCliente } = require('./dados/usuarios');
@@ -30,6 +31,11 @@ const io = new Server(server);
 
 app.use(express.json({ limit: '16kb' })); // corpo das rotas de conta
 
+// AS MUSICAS vem da pasta configurada em festas.js (por padrao dentro de
+// public/). Montada a parte de proposito: assim da para mover o audio para
+// outro disco - ou para outro servidor - sem mexer em mais nada.
+app.use('/assets/festas', express.static(festas.PASTA));
+
 // Tudo dentro de public/ vira URL publica. Ex: public/css/style.css -> /css/style.css
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -47,6 +53,10 @@ if (admin.ligado()) {
 // O cliente busca a lista de animais daqui, em vez de ter uma copia propria.
 // Assim cards.js continua sendo a unica fonte de verdade sobre as cartas.
 app.get('/api/animais', (_req, res) => res.json({ animais: ANIMAIS, regras: REGRAS }));
+
+// As festas (playlists) e - o que mais importa - quais faixas existem mesmo no
+// disco. O player so oferece festa que tem arquivo.
+app.get('/api/festas', (_req, res) => res.json({ ok: true, festas: festas.catalogo() }));
 
 // Sinal de vida. A hospedagem chama esta rota para saber se o servidor subiu
 // antes de mandar gente para a versao nova.
@@ -92,8 +102,20 @@ server.on('error', (erro) => {
   throw erro;
 });
 
+// O que ha de musica, no log da subida: e o jeito de saber que a pasta esta
+// certa sem entrar no jogo e esperar o silencio.
+function conferirMusicas() {
+  const linhas = festas.resumo();
+  const vazias = festas.catalogo().filter((f) => f.total === 0);
+  for (const linha of linhas) console.log(`[festas] ${linha}`);
+  if (vazias.length) {
+    console.log('[festas] festa sem arquivo não aparece no menu. Ver public/assets/festas/LEIA.md');
+  }
+}
+
 abrir()
   .then(() => {
+    conferirMusicas();
     server.listen(PORT, () => {
       const onde = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
       console.log(`\n  Bar Bestial rodando em ${onde}\n`);

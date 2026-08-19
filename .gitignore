@@ -2,3 +2,15 @@ node_modules/
 data/
 shot-*.png
 .env
+
+# Originais das musicas: pesados e pessoais. So as versoes tratadas vao para o jogo.
+audio-original/*
+!audio-original/LEIA.md
+!audio-original/*/
+
+# As faixas tratadas tambem nao vao para o repositorio: sao gravacoes de
+# terceiros. ATENCAO: por causa disto, o site publicado NAO tem musica. Para
+# publicar com musica, apague as duas linhas abaixo (e leia a parte de direitos
+# em public/assets/festas/LEIA.md antes).
+#public/assets/festas/*/*
+#!public/assets/festas/*/.gitkeep

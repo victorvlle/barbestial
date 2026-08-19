@@ -104,6 +104,38 @@ turso db shell seu-banco .dump > backup.sql
 Guarde esse arquivo de vez em quando. É o que torna a promessa de "os dados não
 se perdem" independente de qualquer empresa.
 
+## A música das festas
+
+O jogo toca arquivos que fazem parte do projeto — não há mais player de vídeo de
+terceiros, iframe nem streaming. Cada festa é uma pasta em
+`public/assets/festas/<festa>/`, e **o que está na pasta é o que toca**: o nome
+do arquivo (`Título - Artista.mp3`) vira o que aparece no tocador. As festas em
+si (id, nome, emoji) ficam em `server/game/festas.js`.
+
+**Os arquivos de áudio não estão no repositório** — são gravações de terceiros.
+Ver `public/assets/festas/LEIA.md`.
+
+```
+npm run musicas        # o que já está lá e o que falta
+node scripts/abafar.js # trata os originais e gera as versões que o jogo toca
+```
+
+O tratamento é o efeito de "festa do outro lado da parede": corta os agudos
+acima de ~500 Hz, preserva o grave, satura de leve, põe uma reverberação curta e
+normaliza todas as faixas no mesmo volume. A cadeia completa está comentada
+linha a linha no começo de `scripts/abafar.js`.
+
+Enquanto faltar arquivo, nada quebra: festa sem faixa nenhuma não aparece no
+menu, o tocador fica escondido, e o servidor lista no log o que está faltando.
+
+### Uma festa nova
+
+1. crie a pasta `public/assets/festas/<id>/`;
+2. acrescente o bloco em `server/game/festas.js`;
+3. ponha os originais em `audio-original/<id>/` e rode o `abafar.js`.
+
+O seletor no menu e o tocador se ajustam sozinhos.
+
 ## Migrações
 
 O banco se atualiza sozinho ao subir o servidor. A versão do formato fica numa

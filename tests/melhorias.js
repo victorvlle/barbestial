@@ -3,9 +3,16 @@ const { chromium } = require('playwright');
 const { entrarNoJogo, ambienteDeTeste } = require('./ajuda');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const raiz = path.join(__dirname, '..');
+
+// Uma pasta de festas VAZIA de propósito: aqui o teste é o caminho "o projeto
+// não tem música nenhuma", e ele não pode depender de quem está rodando ter
+// colocado (ou não) os arquivos de áudio.
+const semMusica = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-sem-musica-'));
 const PORTA = 3994, url = `http://localhost:${PORTA}`;
-const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA) });
+const s = spawn('node', ['server/index.js'], { cwd: raiz, env: ambienteDeTeste(PORTA, { FESTAS_PASTA: semMusica }) });
 const espera = ms => new Promise(r => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
@@ -92,23 +99,20 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
   const cores = await ana.locator('#log li.com-dono').evaluateAll(els => [...new Set(els.map(e => getComputedStyle(e).borderLeftColor))]);
   check(cores.length >= 1, `cores presentes no log: ${cores.join(' | ')}`);
 
-  // música: bloco visível, botão de mudo funcionando e jogo intacto sem YouTube
-  check(await ana.locator('#bloco-musica').isVisible(), 'o bloco da música aparece na mesa');
-  const tamanho = await ana.locator('#player-musica').evaluate((e) => {
-    const r = e.getBoundingClientRect();
-    return { l: Math.round(r.width), a: Math.round(r.height) };
-  });
-  check(tamanho.l >= 200 && tamanho.a >= 200,
-    `o player tem o tamanho mínimo exigido pelo YouTube (${tamanho.l}x${tamanho.a})`);
-
-  const antes = await ana.locator('#btn-mudo').evaluate((e) => e.classList.contains('mudo'));
-  await ana.click('#btn-mudo');
-  await espera(200);
-  const depois = await ana.locator('#btn-mudo').evaluate((e) => e.classList.contains('mudo'));
-  check(antes !== depois, 'o botão de mudo alterna');
-  await ana.click('#btn-mudo'); // volta ao estado anterior
-
-  check(!(await ana.locator('#tela-jogo').isHidden()), 'o jogo continua de pé mesmo sem o YouTube carregar');
+  // MÚSICA: este projeto não guarda os arquivos das faixas (são gravações
+  // comerciais), então aqui o teste é o contrário do óbvio - a mesa precisa
+  // ficar inteira mesmo sem música nenhuma, e o tocador não pode aparecer
+  // prometendo uma festa que não existe. O sistema de música em si tem suíte
+  // própria, com faixas geradas na hora: tests/festas.js.
+  check(
+    await ana.locator('#tocador').isHidden(),
+    'sem arquivos de música, o tocador não aparece'
+  );
+  check(
+    await ana.locator('#festas').isHidden(),
+    'e o seletor de festa também não - nada de oferecer silêncio'
+  );
+  check(!(await ana.locator('#tela-jogo').isHidden()), 'e a mesa fica inteira do mesmo jeito');
 
   // tudo dentro da tela, sem rolagem da página
   const cabe = await ana.evaluate(() => ({

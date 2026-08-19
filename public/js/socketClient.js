@@ -50,6 +50,15 @@ const preferencias = {
   definirPrevia: (ligada) => localStorage.setItem('barbestial:previa', ligada ? 'sim' : 'nao'),
   musicaLigada: () => localStorage.getItem('barbestial:musica') !== 'nao',
   definirMusica: (ligada) => localStorage.setItem('barbestial:musica', ligada ? 'sim' : 'nao'),
+  // A festa escolhida e o volume do tocador. Ficam no navegador: são gosto de
+  // cada um, não dado de conta.
+  festa: () => localStorage.getItem('barbestial:festa') || '',
+  definirFesta: (id) => localStorage.setItem('barbestial:festa', id),
+  volume: () => {
+    const guardado = Number(localStorage.getItem('barbestial:volume'));
+    return Number.isFinite(guardado) && guardado > 0 ? Math.min(1, guardado) : 0.7;
+  },
+  definirVolume: (v) => localStorage.setItem('barbestial:volume', String(v)),
   // Hologramas: ligados por padrao. Quem prefere a mesa limpa (ou tem um
   // computador mais fraco) desliga aqui e o jogo roda exatamente igual.
   holoLigado: () => localStorage.getItem('barbestial:holo') !== 'nao',

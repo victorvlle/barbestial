@@ -349,16 +349,15 @@ $('btn-sair').addEventListener('click', async () => {
 });
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') fecharModal(); });
 
-function pintarBotaoMudo() {
-  const ligada = preferencias.musicaLigada();
-  $('btn-mudo').classList.toggle('mudo', !ligada);
-  $('btn-mudo').title = ligada ? 'Desligar a música' : 'Ligar a música';
-}
+// O tocador desenha o próprio botão de mudo (ver pintarTocador em musica.js);
+// aqui ficam só as ligações dos botões.
+const pintarBotaoMudo = () => pintarTocador();
 
-$('btn-mudo').addEventListener('click', () => {
-  alternarMudo();
-  pintarBotaoMudo();
-});
+$('btn-mudo').addEventListener('click', alternarMudo);
+$('tocador-play').addEventListener('click', alternarPausa);
+$('tocador-proxima').addEventListener('click', () => proximaFaixa(true));
+$('tocador-volume').addEventListener('input', (e) => mudarVolume(e.target.value));
+$('btn-entrar-festa').addEventListener('click', () => entrarNaFesta());
 
 // ------------------------------------------------------------ menu da partida
 
@@ -381,7 +380,6 @@ $('menu-instrucoes').addEventListener('click', () => {
 
 $('menu-musica').addEventListener('click', () => {
   alternarMudo();
-  pintarBotaoMudo();
   abrirMenu(false);
 });
 

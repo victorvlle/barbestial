@@ -86,6 +86,14 @@
 
       <p class="aviso" id="aviso-entrada"></p>
 
+      <!-- ESCOLHA SUA FESTA. Faz parte do painel do menu, não é tela à parte.
+           Os botões saem do catálogo do servidor (server/game/festas.js). -->
+      <div class="festas escondida" id="festas">
+        <h3>Escolha sua festa</h3>
+        <div class="festas-lista" id="festas-lista"></div>
+        <button id="btn-entrar-festa" class="secundario">Entrar na festa</button>
+      </div>
+
       <div class="opcoes">
         <label class="alternador">
           <input type="checkbox" id="opt-previa" checked />
@@ -223,21 +231,6 @@
         <h2>Sua mão <span class="baralho" id="baralho"></span> <span class="dica" id="dica-mao"></span></h2>
         <div class="cartas" id="mao"></div>
       </div>
-      <!-- O player fica visível de propósito: ver o comentário em js/musica.js -->
-      <div class="bloco bloco--musica" id="bloco-musica">
-        <h2>
-          Música
-          <button id="btn-mudo" class="redondo" title="Ligar ou desligar a música">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path class="alto-falante" d="M4 9v6h4l5 4V5L8 9H4z"/>
-              <path class="ondas" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
-              <path class="corte" d="M17 9l6 6M23 9l-6 6"/>
-            </svg>
-          </button>
-        </h2>
-        <div id="player-musica"></div>
-      </div>
-
       <div class="bloco bloco--log">
         <h2>Últimas jogadas</h2>
         <ul class="log" id="log"></ul>
@@ -279,6 +272,30 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <!-- O TOCADOR. Pequeno, no canto, e o mesmo no menu e na mesa - a festa não
+       para quando você volta para o menu. -->
+  <aside class="tocador escondida" id="tocador">
+    <div class="tocador-barra"><span id="tocador-progresso"></span></div>
+    <div class="tocador-corpo">
+      <div class="tocador-textos">
+        <p class="tocador-festa" id="tocador-festa">—</p>
+        <p class="tocador-faixa" id="tocador-faixa">—</p>
+      </div>
+      <div class="tocador-botoes">
+        <button id="tocador-play" class="redondo" title="Tocar">▶</button>
+        <button id="tocador-proxima" class="redondo" title="Próxima música">⏭</button>
+        <button id="btn-mudo" class="redondo" title="Ligar ou desligar a música">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="alto-falante" d="M4 9v6h4l5 4V5L8 9H4z"/>
+            <path class="ondas" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+            <path class="corte" d="M17 9l6 6M23 9l-6 6"/>
+          </svg>
+        </button>
+        <input type="range" id="tocador-volume" min="0" max="1" step="0.05" title="Volume" />
+      </div>
+    </div>
+  </aside>
+
   <script src="/js/socketClient.js"></script>
   <script src="/js/musica.js"></script>
   <script src="/js/animacao.js"></script>
