@@ -100,7 +100,7 @@ test('banco novo nasce já na versão atual e com as tabelas certas', async () =
   const { banco, apagar } = bancoTemporario();
   try {
     await migrar(banco);
-    assert.strictEqual((await uma(banco, 'PRAGMA user_version')).user_version, VERSAO_ATUAL);
+    assert.strictEqual((await uma(banco, 'SELECT versao FROM esquema')).versao, VERSAO_ATUAL);
 
     const tabelas = (await todas(banco, "SELECT name FROM sqlite_master WHERE type='table'")).map(
       (t) => t.name
@@ -129,7 +129,7 @@ test('rodar a migração de novo não faz nada (é seguro reiniciar o servidor)'
     await migrar(banco);
     await migrar(banco);
     await migrar(banco);
-    assert.strictEqual((await uma(banco, 'PRAGMA user_version')).user_version, VERSAO_ATUAL);
+    assert.strictEqual((await uma(banco, 'SELECT versao FROM esquema')).versao, VERSAO_ATUAL);
   } finally {
     apagar();
   }
@@ -212,6 +212,90 @@ test('formato estrito: as contas continuam, agora com espaço para e-mail', asyn
     assert.strictEqual(contas[1].senha_trocada_em, 1500, 'os carimbos de data seguem iguais');
 
     assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM resultados')).n, 2);
+  } finally {
+    apagar();
+  }
+});
+
+// ================================================= a marcacao de versao
+//
+// A versao morava no PRAGMA user_version. O Turso remoto RECUSA escrever
+// pragma - o servidor nem subia ("SQL not allowed statement"). Passou a morar
+// numa tabela; estes testes garantem que os bancos marcados do jeito antigo
+// continuam sendo reconhecidos, senao a migracao rodaria tudo de novo por cima
+// de dados que ja estao no formato certo.
+
+test('banco marcado do jeito antigo (user_version) é reconhecido, e nada roda duas vezes', async () => {
+  const { banco, apagar } = bancoTemporario();
+  try {
+    // Um banco já pronto, com uma conta dentro...
+    await migrar(banco);
+    await banco.execute(
+      `INSERT INTO usuarios (id, apelido, apelido_chave, email, email_chave, criado_em, visto_em)
+       VALUES ('v','Victor','victor','victor@exemplo.test','victor@exemplo.test',1000,2000)`
+    );
+
+    // ...marcado como a versão ANTERIOR do jogo marcava: pragma, sem a tabela.
+    await banco.execute('DROP TABLE esquema');
+    await banco.execute(`PRAGMA user_version = ${VERSAO_ATUAL}`);
+
+    // Se a marcação antiga fosse ignorada, a migração recomeçaria do zero e
+    // tentaria reconstruir `usuarios` a partir de colunas que não existem mais.
+    await migrar(banco);
+
+    const contas = await todas(banco, 'SELECT * FROM usuarios');
+    assert.strictEqual(contas.length, 1, 'a conta continua lá');
+    assert.strictEqual(contas[0].email, 'victor@exemplo.test');
+    assert.strictEqual(
+      (await uma(banco, 'SELECT versao FROM esquema')).versao,
+      VERSAO_ATUAL,
+      'e a marcação passou para a tabela, sem precisar do pragma'
+    );
+  } finally {
+    apagar();
+  }
+});
+
+test('a migração NÃO escreve pragma - é o que quebrava no Turso', async () => {
+  // O erro real de produção: "SQL not allowed statement: PRAGMA user_version = 1".
+  // Aqui um banco de mentira recusa qualquer escrita de pragma, igual ao Turso,
+  // e a migração precisa passar assim mesmo.
+  const { banco, apagar } = bancoTemporario();
+  const recusadas = [];
+  const executarDeVerdade = banco.execute.bind(banco);
+  banco.execute = (comando) => {
+    const sql = typeof comando === 'string' ? comando : comando.sql;
+    if (/^\s*PRAGMA\s+\w+\s*=/i.test(sql)) {
+      recusadas.push(sql);
+      return Promise.reject(new Error(`SQL not allowed statement: ${sql}`));
+    }
+    return executarDeVerdade(comando);
+  };
+
+  try {
+    await migrar(banco);
+    assert.deepStrictEqual(recusadas, [], 'nenhuma escrita de pragma pode ter sido tentada');
+    assert.strictEqual((await uma(banco, 'SELECT versao FROM esquema')).versao, VERSAO_ATUAL);
+    const tabelas = (await todas(banco, "SELECT name FROM sqlite_master WHERE type='table'")).map(
+      (t) => t.name
+    );
+    assert.ok(tabelas.includes('usuarios') && tabelas.includes('tokens'), 'o banco ficou pronto');
+  } finally {
+    apagar();
+  }
+});
+
+test('uma migração interrompida no meio pode ser rodada de novo', async () => {
+  // Sem transação em volta dos degraus, uma queda de conexão pode deixar a
+  // tabela temporária para trás. A tentativa seguinte não pode travar por isso.
+  const { banco, apagar } = bancoTemporario();
+  try {
+    await montarFormatoOriginal(banco);
+    await banco.executeMultiple('CREATE TABLE usuarios_novo (id TEXT);'); // sobra de uma tentativa
+    await migrar(banco);
+
+    assert.strictEqual((await uma(banco, 'SELECT COUNT(*) AS n FROM usuarios')).n, 3);
+    assert.strictEqual((await uma(banco, 'SELECT versao FROM esquema')).versao, VERSAO_ATUAL);
   } finally {
     apagar();
   }

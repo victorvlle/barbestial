@@ -64,7 +64,13 @@ async function abrir(config = enderecoDoBanco()) {
   db = createClient(config);
 
   // Chave estrangeira e o que faz apagar uma conta levar junto os tokens dela.
-  await db.execute('PRAGMA foreign_keys = ON');
+  // No Turso remoto isso ja vem ligado e o PRAGMA e recusado - por isso o erro
+  // aqui e apenas anotado, nao derruba a subida.
+  try {
+    await db.execute('PRAGMA foreign_keys = ON');
+  } catch (erro) {
+    console.log('[banco] o servidor não aceita PRAGMA (normal no Turso):', erro.message);
+  }
 
   await migrar(db);
   return db;
@@ -123,10 +129,16 @@ async function transacao(acao) {
 // MIGRACOES
 // ============================================================================
 //
-// COMO FUNCIONA: o SQLite guarda um numero inteiro por banco (PRAGMA
-// user_version). Cada degrau abaixo leva de uma versao para a seguinte, e so
-// roda se o banco ainda nao passou por ele. Subir o servidor duas vezes nao
-// executa nada duas vezes.
+// COMO FUNCIONA: uma tabela `esquema` guarda um numero inteiro - a versao do
+// formato. Cada degrau abaixo leva de uma versao para a seguinte, e so roda se
+// o banco ainda nao passou por ele. Subir o servidor duas vezes nao executa
+// nada duas vezes.
+//
+// POR QUE UMA TABELA E NAO O `PRAGMA user_version`: era assim antes, e o
+// SQLite local aceita numa boa. Mas o Turso RECUSA escrever pragma pela rede
+// ("SQL not allowed statement: PRAGMA user_version = 1") - o servidor nem
+// subia. Uma tabela comum funciona igual nos dois, e bancos antigos, que ainda
+// marcam a versao no pragma, continuam sendo reconhecidos (ver versaoDoEsquema).
 //
 // REGRA DESTE ARQUIVO: migracao NAO APAGA CONTA DE NINGUEM. Quando uma coluna
 // precisa mudar de regra (o SQLite nao sabe "ALTER COLUMN"), a tabela e
@@ -196,10 +208,13 @@ const MIGRACOES = [
   //   (b) o segundo, que exigia apelido+senha+login externo juntos
   // Os dois viram o formato novo SEM PERDER NENHUMA LINHA.
   async (banco) => {
-    const colunas = (await banco.execute('PRAGMA table_info(usuarios)')).rows.map((c) => c.name);
+    // As colunas saem de um SELECT vazio, e nao de PRAGMA table_info: o Turso
+    // remoto recusa pragma, e `LIMIT 0` funciona em qualquer banco.
+    const colunas = (await banco.execute('SELECT * FROM usuarios LIMIT 0')).columns;
     const formatoOriginal = colunas.includes('provedor');
 
     await banco.executeMultiple(`
+      DROP TABLE IF EXISTS usuarios_novo;
       CREATE TABLE usuarios_novo (
         id             TEXT PRIMARY KEY,
         apelido        TEXT NOT NULL,
@@ -279,6 +294,7 @@ const MIGRACOES = [
   //     (apagar um usuario derrubaria os resultados dele em cascata)
   async (banco) => {
     await banco.executeMultiple(`
+      DROP TABLE IF EXISTS usuarios_novo;
       CREATE TABLE usuarios_novo (
         id             TEXT PRIMARY KEY,
         apelido        TEXT NOT NULL,
@@ -324,21 +340,57 @@ const MIGRACOES = [
   },
 ];
 
-async function migrar(banco) {
-  const versao = (await banco.execute('PRAGMA user_version')).rows[0].user_version;
+// Em que versao este banco esta. Procura em dois lugares, nesta ordem:
+//   1. a tabela `esquema`, que e como marcamos hoje;
+//   2. o `PRAGMA user_version`, que e como marcavamos antes - bancos criados
+//      pela versao anterior do jogo precisam continuar sendo reconhecidos, ou a
+//      migracao rodaria tudo de novo por cima de dados que ja estao certos.
+// Se nenhum dos dois disser nada, e um banco novo (ou anterior ao controle de
+// versao): comeca do zero, e o degrau 0->1 e escrito com CREATE TABLE IF NOT
+// EXISTS justamente para isso ser inofensivo.
+async function versaoDoEsquema(banco) {
+  const temTabela = await banco.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='esquema'"
+  );
+  if (temTabela.rows.length) {
+    const linha = (await banco.execute('SELECT versao FROM esquema LIMIT 1')).rows[0];
+    if (linha) return Number(linha.versao);
+  }
 
-  // Bancos que existem desde antes deste sistema de versao aparecem como 0 mas
-  // ja tem as tabelas. Reconhecemos isso pela presenca da tabela de usuarios: o
-  // degrau 0->1 usa CREATE TABLE IF NOT EXISTS, entao rodar nele e inofensivo.
+  try {
+    const pragma = (await banco.execute('PRAGMA user_version')).rows[0];
+    if (pragma && Number(pragma.user_version) > 0) return Number(pragma.user_version);
+  } catch (erro) {
+    // O Turso remoto nao deixa nem ler pragma. Banco de la e sempre novo o
+    // bastante para nao ter marcacao antiga, entao seguir com 0 esta certo.
+  }
+  return 0;
+}
+
+async function anotarVersao(banco, versao) {
+  await banco.execute('CREATE TABLE IF NOT EXISTS esquema (versao INTEGER NOT NULL)');
+  await banco.execute('DELETE FROM esquema');
+  await banco.execute({ sql: 'INSERT INTO esquema (versao) VALUES (?)', args: [versao] });
+}
+
+async function migrar(banco) {
+  const versao = await versaoDoEsquema(banco);
+
   for (let degrau = versao; degrau < VERSAO_ATUAL; degrau++) {
-    // De proposito FORA de uma transacao: o SQLite nao permite mexer em
-    // user_version dentro de uma, e varios degraus fazem DDL (CREATE/DROP),
-    // que ja e atomico por comando. Se um degrau falhar no meio, o servidor nao
-    // sobe e o log diz qual foi - nenhum degrau seguinte roda por cima.
+    // De proposito FORA de uma transacao: os degraus fazem DDL (CREATE/DROP),
+    // que o SQLite ja aplica de forma atomica por comando. Se um degrau falhar
+    // no meio, o servidor nao sobe e o log diz qual foi - nenhum degrau
+    // seguinte roda por cima. Cada degrau tambem comeca limpando a tabela
+    // temporaria que ele usa, para uma tentativa anterior interrompida nao
+    // impedir a proxima.
     await MIGRACOES[degrau](banco);
-    await banco.execute(`PRAGMA user_version = ${degrau + 1}`);
+    await anotarVersao(banco, degrau + 1);
     console.log(`[banco] migração aplicada: ${degrau} -> ${degrau + 1}`);
   }
+
+  // Sempre grava a marcacao, mesmo sem migracao nenhuma: e assim que um banco
+  // que so tinha o pragma antigo passa a ter a tabela.
+  await anotarVersao(banco, VERSAO_ATUAL);
 }
 
 // Fechar so importa nos testes, para o processo poder terminar limpo.
@@ -351,6 +403,7 @@ module.exports = {
   abrir,
   fechar,
   migrar,
+  versaoDoEsquema,
   cliente,
   um,
   tudo,

@@ -151,8 +151,14 @@ se perdem" independente de qualquer empresa.
 
 ## Migrações
 
-O banco se atualiza sozinho ao subir o servidor, usando `PRAGMA user_version`.
-Cada degrau roda uma vez só; reiniciar não repete nada.
+O banco se atualiza sozinho ao subir o servidor. A versão do formato fica numa
+tabela chamada `esquema`; cada degrau roda uma vez só, e reiniciar não repete
+nada.
+
+> A versão morava no `PRAGMA user_version`, que o SQLite local aceita numa boa.
+> **O Turso recusa escrever pragma pela rede** (`SQL not allowed statement`) e o
+> servidor nem subia. Bancos marcados do jeito antigo continuam sendo
+> reconhecidos — há um teste só para isso.
 
 | degrau | o que faz |
 |---|---|
