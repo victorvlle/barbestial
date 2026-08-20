@@ -349,19 +349,22 @@ $('btn-sair').addEventListener('click', async () => {
 });
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') fecharModal(); });
 
-// O tocador desenha o próprio botão de mudo (ver pintarTocador em musica.js);
-// aqui ficam só as ligações dos botões.
-const pintarBotaoMudo = () => pintarTocador();
+// O som do bar desenha a si mesmo (ver pintarSom em musica.js); aqui ficam só
+// as ligações dos botões.
+const pintarBotaoMudo = () => pintarSom();
+
+// Clicar no bloco compacto abre os controles; clicar de novo fecha.
+$('som-face').addEventListener('click', () => alternarControles());
 
 $('btn-mudo').addEventListener('click', alternarMudo);
-$('tocador-play').addEventListener('click', alternarPausa);
-$('tocador-proxima').addEventListener('click', () => proximaFaixa(true));
-$('tocador-volume').addEventListener('input', (e) => mudarVolume(e.target.value));
+$('som-play').addEventListener('click', alternarPausa);
+$('som-proxima').addEventListener('click', () => proximaFaixa(true));
+$('som-volume').addEventListener('input', (e) => mudarVolume(e.target.value));
 
 // ------------------------------------------------------------ reações
 
 // O botão abre e fecha a bandeja. Quem desenha e quem manda é reacoes.js; aqui
-// ficam só as ligações, como acontece com o tocador logo acima.
+// ficam só as ligações, como acontece com o som do bar logo acima.
 $('btn-reacoes').addEventListener('click', (e) => {
   e.stopPropagation();
   abrirBandeja($('reacoes-bandeja').classList.contains('escondida'));

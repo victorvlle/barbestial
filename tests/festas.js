@@ -14,7 +14,7 @@
 //   * a ordem é sorteada, sem repetir a mesma música na sequência
 //   * todas tocam antes de qualquer repetição
 //   * partida nova = ordem nova
-//   * os controles do tocador funcionam
+//   * os controles do som do bar funcionam
 
 const { chromium } = require('playwright');
 const { spawn, execFileSync } = require('child_process');
@@ -88,7 +88,7 @@ const encerrar = () => {
   const edm = catalogo.festas.find((f) => f.id === 'edm');
   check(edm && edm.total === QUANTAS, `a playlist sai da PASTA, não de uma lista fixa (${edm && edm.total} faixas)`);
 
-  // O nome do arquivo é quem diz o que aparece no tocador.
+  // O nome do arquivo é quem diz o que aparece no som do bar.
   const primeira = edm.faixas[0];
   check(primeira.titulo === 'Faixa 1 do teste', `"Título - Artista.mp3" vira título (${primeira.titulo})`);
   check(primeira.artista === 'Artista edm', `e artista (${primeira.artista})`);
@@ -159,7 +159,7 @@ const encerrar = () => {
     await pagina.evaluate(() => audio.paused && !faixaAtual),
     'escolher a festa no menu não começa a tocar nada'
   );
-  check(await pagina.locator('#tocador').isHidden(), 'e o tocador nem aparece no menu');
+  check(await pagina.locator('#som').isHidden(), 'e o som do bar nem aparece no menu');
   check(
     (await pagina.locator('#btn-entrar-festa').count()) === 0,
     'não existe mais botão de "entrar na festa"'
@@ -171,15 +171,15 @@ const encerrar = () => {
 
   // `position: fixed` sempre tem offsetParent nulo - a visibilidade vem do
   // navegador, não do DOM.
-  const tocadorVisivel = await pagina.locator('#tocador').isVisible();
+  const somVisivel = await pagina.locator('#som').isVisible();
   const tocando = await pagina.evaluate(() => ({
-    festa: document.getElementById('tocador-festa').textContent,
-    faixa: document.getElementById('tocador-faixa').textContent,
+    festa: document.getElementById('som-festa').textContent,
+    faixa: document.getElementById('som-faixa').textContent,
     andando: audio.currentTime > 0,
     pausado: audio.paused,
     src: audio.src,
   }));
-  check(tocadorVisivel, 'começou a partida: o tocador aparece');
+  check(somVisivel, 'começou a partida: o som aparece no painel do bar');
   check(/Summer/i.test(tocando.festa), `mostrando a festa escolhida (${tocando.festa})`);
   check(tocando.faixa.includes('—'), `e a música da vez (${tocando.faixa})`);
   check(!tocando.pausado && tocando.andando, 'a música está TOCANDO de verdade, não só carregada');
@@ -228,22 +228,26 @@ const encerrar = () => {
 
   // ============================================== 6. os controles
   const controles = await pagina.evaluate(async () => {
+    // Compacto por padrão: quem quiser os controles precisa abrir.
+    document.getElementById('som-face').click();
     const antes = faixaAtual.arquivo;
-    document.getElementById('tocador-proxima').click();
+    document.getElementById('som-proxima').click();
     const depois = faixaAtual.arquivo;
 
-    document.getElementById('tocador-play').click(); // pausa
+    document.getElementById('som-play').click(); // pausa
     await new Promise((r) => setTimeout(r, 150));
     const pausou = audio.paused;
-    document.getElementById('tocador-play').click(); // volta
+    document.getElementById('som-play').click(); // volta
     await new Promise((r) => setTimeout(r, 150));
 
-    document.getElementById('tocador-volume').value = '0.3';
-    document.getElementById('tocador-volume').dispatchEvent(new Event('input'));
+    document.getElementById('som-volume').value = '0.3';
+    document.getElementById('som-volume').dispatchEvent(new Event('input'));
 
     document.getElementById('btn-mudo').click();
     const mudo = audio.muted;
     document.getElementById('btn-mudo').click();
+
+    document.getElementById('som-face').click(); // fecha de novo
 
     return { trocou: antes !== depois, pausou, voltou: !audio.paused, volume: audio.volume, mudo, semMudo: !audio.muted };
   });
@@ -258,9 +262,104 @@ const encerrar = () => {
     }
     audio.currentTime = audio.duration / 2;
     audio.dispatchEvent(new Event('timeupdate'));
-    return parseFloat(document.getElementById('tocador-progresso').style.width);
+    return parseFloat(document.getElementById('som-progresso').style.width);
   });
   check(progresso > 30 && progresso < 70, `a barra de progresso acompanha a música (${progresso}%)`);
+
+  // ============================================== 6b. o som É DO BAR
+  //
+  // A música saiu do canto de baixo à direita e virou uma informação do
+  // ambiente, no rodapé do painel do BAR. O que este bloco confere é
+  // exatamente o que muda com isso: existe UM ponto de música só, ele mora
+  // dentro do bar, nasce compacto, abre quando o jogador pede, e o
+  // equalizador conta se a música está tocando ou parada.
+  const ondeMora = await pagina.evaluate(() => {
+    const som = document.getElementById('som');
+    const bar = document.querySelector('.zona--bar');
+    const c = som.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    return {
+      dentroDoBar: bar.contains(som),
+      // "dentro" de verdade, na tela: o bloco todo cabe no painel do bar.
+      encaixado: c.top >= b.top - 1 && c.bottom <= b.bottom + 1 && c.left >= b.left - 1 && c.right <= b.right + 1,
+      // Um player só na página inteira - nada de sobra do antigo.
+      quantosPlayers: document.querySelectorAll('.som, .tocador').length,
+      sobrouOAntigo: Boolean(document.getElementById('tocador')),
+      altura: Math.round(c.height),
+    };
+  });
+  check(ondeMora.dentroDoBar && ondeMora.encaixado, 'a música mora dentro do painel do BAR');
+  check(ondeMora.quantosPlayers === 1 && !ondeMora.sobrouOAntigo, 'e existe UM ponto de música só - o antigo saiu');
+  check(ondeMora.altura < 110, `compacto, sem roubar a coluna do bar (${ondeMora.altura}px de altura)`);
+
+  // Nada do que importa no jogo pode ficar embaixo dele.
+  const cobre = await pagina.evaluate(() => {
+    const bate = (a, b) => a && b && !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+    const som = document.getElementById('som').getBoundingClientRect();
+    const alvos = { fila: '#fila', mao: '#mao', ralo: '#ralo', registro: '#log', reacoes: '#bloco-reacoes', relogio: '#relogio', placar: '#placar' };
+    return Object.entries(alvos)
+      .filter(([, sel]) => bate(som, document.querySelector(sel)?.getBoundingClientRect()))
+      .map(([nome]) => nome);
+  });
+  check(cobre.length === 0, `não cobre nada do jogo ${cobre.join(', ')}`);
+
+  // Compacto por padrão; clicar abre os controles; clicar de novo fecha.
+  const abreEFecha = await pagina.evaluate(async () => {
+    const som = document.getElementById('som');
+    const controles = document.getElementById('som-controles');
+    const face = document.getElementById('som-face');
+    const comeca = controles.classList.contains('escondida');
+    face.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const abriu = !controles.classList.contains('escondida') && som.classList.contains('som--aberto');
+    const aria = face.getAttribute('aria-expanded');
+    face.click();
+    await new Promise((r) => setTimeout(r, 150));
+    return { comeca, abriu, aria, fechou: controles.classList.contains('escondida') };
+  });
+  check(abreEFecha.comeca, 'nasce compacto: os controles ficam guardados');
+  check(abreEFecha.abriu && abreEFecha.aria === 'true', 'clicar expande e mostra os controles');
+  check(abreEFecha.fechou, 'e clicar de novo volta ao compacto');
+
+  // O equalizador é o sinal de "está tocando": pausou, ele para.
+  const equalizador = await pagina.evaluate(async () => {
+    const som = document.getElementById('som');
+    const barras = document.querySelectorAll('#som-eq i').length;
+    const rodando = () => getComputedStyle(document.querySelector('#som-eq i')).animationPlayState;
+    const tocandoAgora = { estado: document.getElementById('som-estado').textContent, eq: rodando(), classe: som.classList.contains('som--tocando') };
+    document.getElementById('som-play').click(); // pausa
+    await new Promise((r) => setTimeout(r, 250));
+    const pausado = { estado: document.getElementById('som-estado').textContent, eq: rodando(), classe: som.classList.contains('som--tocando') };
+    document.getElementById('som-play').click(); // volta
+    await new Promise((r) => setTimeout(r, 250));
+    return { barras, tocandoAgora, pausado, voltou: !audio.paused };
+  });
+  check(equalizador.barras >= 8, `a onda do som tem barrinhas (${equalizador.barras})`);
+  check(
+    /tocando/i.test(equalizador.tocandoAgora.estado) && equalizador.tocandoAgora.eq === 'running',
+    `tocando: o estado diz "${equalizador.tocandoAgora.estado.trim()}" e as barras andam`
+  );
+  check(
+    /pausado/i.test(equalizador.pausado.estado) && equalizador.pausado.eq === 'paused',
+    `pausado: o estado diz "${equalizador.pausado.estado.trim()}" e as barras param`
+  );
+  check(equalizador.voltou, 'e voltar a tocar religa tudo');
+
+  // Música nova = um pisca curto no bloco. A classe entra e sai sozinha.
+  const troca = await pagina.evaluate(async () => {
+    const som = document.getElementById('som');
+    som.classList.remove('som--nova');
+    const antes = document.getElementById('som-faixa').textContent;
+    document.getElementById('som-proxima').click();
+    const piscou = som.classList.contains('som--nova');
+    const depois = document.getElementById('som-faixa').textContent;
+    await new Promise((r) => setTimeout(r, 1700));
+    return { piscou, mudouONome: antes !== depois, saiuSozinha: !som.classList.contains('som--nova') };
+  });
+  check(troca.piscou && troca.mudouONome, 'música nova: o nome troca e o bloco dá um pisca');
+  check(troca.saiuSozinha, 'e o pisca sai sozinho, para poder acontecer de novo');
+
+  await pagina.screenshot({ path: path.join(raiz, 'shot-som-bar.png') });
 
   // ============================================== 7. voltar ao menu para a festa
   await pagina.evaluate(() => mostrarTela('entrada'));
@@ -269,7 +368,7 @@ const encerrar = () => {
     await pagina.evaluate(() => audio.paused),
     'voltar ao menu para a música - o menu é silêncio'
   );
-  check(await pagina.locator('#tocador').isHidden(), 'e o tocador some junto');
+  check(await pagina.locator('#som').isHidden(), 'e o som do bar some junto');
 
   check(erros.length === 0, `nenhum erro de JavaScript ${erros.length ? JSON.stringify(erros.slice(0, 2)) : ''}`);
   await navegador.close();

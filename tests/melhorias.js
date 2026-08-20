@@ -101,12 +101,12 @@ const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c)
 
   // MÚSICA: este projeto não guarda os arquivos das faixas (são gravações
   // comerciais), então aqui o teste é o contrário do óbvio - a mesa precisa
-  // ficar inteira mesmo sem música nenhuma, e o tocador não pode aparecer
+  // ficar inteira mesmo sem música nenhuma, e o som do bar não pode aparecer
   // prometendo uma festa que não existe. O sistema de música em si tem suíte
   // própria, com faixas geradas na hora: tests/festas.js.
   check(
-    await ana.locator('#tocador').isHidden(),
-    'sem arquivos de música, o tocador não aparece'
+    await ana.locator('#som').isHidden(),
+    'sem arquivos de música, o som do bar não aparece'
   );
   check(
     await ana.locator('#festas').isHidden(),

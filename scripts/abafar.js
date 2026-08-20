@@ -81,7 +81,23 @@ const PAREDE = [
 const ALVO = { I: -14, TP: -2, LRA: 9 };
 
 // Uma trava no fim da fila, para o mp3 não estourar na hora de decodificar.
-const TRAVA = 'alimiter=limit=0.9:level=false';
+//
+// 0.65 (~-3.7 dBFS), e não 0.9 como era antes. O alimiter trava a AMOSTRA, mas
+// quem estoura o alto-falante é o PICO REAL, que o decodificador reconstrói
+// ENTRE duas amostras. E o mp3 de 96 kbps depois do corte de agudos exagera
+// nisso: medido aqui, uma faixa travada em -2.0 dB de amostra saiu do
+// decodificador com +0.56 dBTP - dois decibéis e meio de sobra, acima do
+// máximo, ou seja, estalo nos picos.
+//
+// A escada medida nessa mesma faixa:
+//   limit=0.85 -> -2.0 dB de amostra -> +0.56 dBTP  (estoura)
+//   limit=0.75 -> -2.5 dB            -> +0.06 dBTP  (no fio)
+//   limit=0.70 -> -3.1 dB            -> -0.54 dBTP
+//   limit=0.65 -> -3.7 dB            -> -1.18 dBTP  <- com folga
+// E o volume percebido quase não muda (-14.41 -> -14.55 LUFS): o limitador só
+// encosta nos picos, e é o corpo da música que manda no LUFS. Ou seja, a folga
+// sai de graça.
+const TRAVA = 'alimiter=limit=0.65:level=false';
 
 // Mono e 96 kbps de propósito: depois do corte de agudos não sobra informação
 // nenhuma acima de 500 Hz para guardar, e o arquivo fica pequeno - o que

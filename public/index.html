@@ -209,6 +209,47 @@
       <div class="zona zona--bar">
         <h2>Bar <span class="conta" id="contagem-bar">0</span></h2>
         <div class="cartas mini" id="bar"></div>
+
+        <!-- O SOM DO BAR.
+             A música não é mais uma caixinha flutuando por cima do jogo: ela
+             mora no rodapé do próprio painel do BAR, que é de onde a festa
+             está vindo. O áudio já é abafado, como quem ouve do lado de fora;
+             aqui a tela conta a mesma história.
+
+             COMPACTO por padrão: o estado, a festa, a música e um equalizador
+             que só mexe enquanto a música mexe. Clicar abre os controles
+             (progresso, play, próxima, mudo e volume) e clicar de novo fecha.
+             Um ponto de música só na tela inteira - não há segundo player. -->
+        <div class="som escondida" id="som">
+          <button type="button" class="som-face" id="som-face" aria-expanded="false"
+                  aria-controls="som-controles" title="Controles da música">
+            <span class="som-estado" id="som-estado">🎵 Tocando</span>
+            <span class="som-festa" id="som-festa">—</span>
+            <span class="som-faixa" id="som-faixa">—</span>
+            <!-- A onda do som: barrinhas que atravessam o bloco. Elas só mexem
+                 enquanto a música mexe (ver .som--tocando no CSS). -->
+            <span class="eq" id="som-eq" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </span>
+          </button>
+
+          <div class="som-controles escondida" id="som-controles">
+            <div class="som-barra"><span id="som-progresso"></span></div>
+            <div class="som-botoes">
+              <button id="som-play" class="redondo" title="Tocar">▶</button>
+              <button id="som-proxima" class="redondo" title="Próxima música">⏭</button>
+              <button id="btn-mudo" class="redondo" title="Ligar ou desligar a música">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path class="alto-falante" d="M4 9v6h4l5 4V5L8 9H4z"/>
+                  <path class="ondas" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+                  <path class="corte" d="M17 9l6 6M23 9l-6 6"/>
+                </svg>
+              </button>
+              <input type="range" id="som-volume" min="0" max="1" step="0.05" title="Volume" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="zona zona--fila">
@@ -288,42 +329,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <!-- O TOCADOR. Pequeno, no canto de baixo à direita, por cima de tudo mas sem
-       encostar em carta nenhuma.
-
-       A IDEIA: não é "um player em cima do jogo", é a festa que já está rolando
-       lá dentro enquanto você espera na porta. Por isso a chamada em cima
-       ("Enquanto você espera…"), o equalizador que só mexe quando a música mexe,
-       e a hierarquia: primeiro QUAL FESTA, depois QUAL MÚSICA. Os controles
-       ficam embaixo, menores - eles são o detalhe, não o assunto.
-
-       Na sala de espera a chamada aparece inteira; com a partida rolando ela
-       encolhe para um "TOCANDO" discreto, para não competir com o jogo. -->
-  <aside class="tocador escondida" id="tocador">
-    <div class="tocador-barra"><span id="tocador-progresso"></span></div>
-    <div class="tocador-corpo">
-      <p class="tocador-chamada">
-        <span class="eq" id="tocador-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span id="tocador-chamada-texto">Enquanto você espera…</span>
-      </p>
-      <div class="tocador-textos">
-        <p class="tocador-festa" id="tocador-festa">—</p>
-        <p class="tocador-faixa" id="tocador-faixa">—</p>
-      </div>
-      <div class="tocador-botoes">
-        <button id="tocador-play" class="redondo" title="Tocar">▶</button>
-        <button id="tocador-proxima" class="redondo" title="Próxima música">⏭</button>
-        <button id="btn-mudo" class="redondo" title="Ligar ou desligar a música">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path class="alto-falante" d="M4 9v6h4l5 4V5L8 9H4z"/>
-            <path class="ondas" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
-            <path class="corte" d="M17 9l6 6M23 9l-6 6"/>
-          </svg>
-        </button>
-        <input type="range" id="tocador-volume" min="0" max="1" step="0.05" title="Volume" />
-      </div>
-    </div>
-  </aside>
 
   <script src="/js/socketClient.js"></script>
   <script src="/js/musica.js"></script>

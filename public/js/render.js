@@ -25,13 +25,10 @@ function mostrarTela(qual) {
   for (const tela of document.querySelectorAll('.tela')) {
     tela.classList.toggle('escondida', tela.id !== `tela-${qual}`);
   }
-  // A música começa quando você já está do lado de dentro: na sala de espera e
-  // na mesa. No menu principal, silêncio. Quem está esperando na sala vê o
-  // tocador com a chamada por extenso; na mesa ela fica discreta.
-  if (typeof tocar === 'function') {
-    if (qual === 'sala' || qual === 'jogo') tocar(qual);
-    else parar();
-  }
+  // A música é da MESA e de mais lugar nenhum: começa quando a partida começa e
+  // para ao sair dela. Menu e sala de espera são silêncio - lá não existe nem
+  // música nem player.
+  if (typeof tocar === 'function') (qual === 'jogo' ? tocar : parar)();
   // Reação é da partida e some com ela: sair da mesa não deixa emoji voando.
   if (qual !== 'jogo' && typeof limparReacoes === 'function') limparReacoes();
 }

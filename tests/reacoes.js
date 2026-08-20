@@ -1,4 +1,4 @@
-// AS REAÇÕES E O TOCADOR, em dois navegadores de verdade.
+// AS REAÇÕES E O SOM DO BAR, em dois navegadores de verdade.
 // Rode com: node tests/reacoes.js
 //
 // A parte que importa deste teste é a última: NÃO basta o botão aparecer na
@@ -16,8 +16,8 @@
 //   * espectador não manda reação, nem forjando o evento pelo console
 //   * o servidor recusa qualquer coisa fora da lista
 //   * nada disso vira histórico
-//   * o tocador diz que festa e que música estão rolando, e mostra que está
-//     tocando enquanto se espera
+//   * o som do bar diz que festa e que música estão rolando, expande os
+//     controles quando clicado, e não existe nem música nem player fora da mesa
 
 const { chromium } = require('playwright');
 const { spawn, execFileSync } = require('child_process');
@@ -33,7 +33,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 let falhas = 0;
 const check = (c, m) => { console.log(`${c ? 'ok   ' : 'FALHA'}  ${m}`); if (!c) falhas++; };
 
-// Faixas de teste próprias (tons curtos), para o tocador ter o que tocar.
+// Faixas de teste próprias (tons curtos), para o som do bar ter o que tocar.
 const pastaDeTeste = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-reacoes-'));
 function gerarFaixas() {
   const pasta = path.join(pastaDeTeste, 'edm');
@@ -92,23 +92,16 @@ const esperarReacao = (pagina, emoji, limite = 4000) =>
   await espera(700);
   const codigo = (await ana.textContent('#codigo-sala')).trim();
 
-  // O tocador na espera: é aqui que a música é "enquanto você espera".
+  // NA SALA DE ESPERA NÃO EXISTE MÚSICA NEM PLAYER. A música é da mesa e de
+  // mais lugar nenhum - este é o ponto que o pedido chamou de inegociável.
   const naEspera = await ana.evaluate(() => ({
-    visivel: !document.getElementById('tocador').classList.contains('escondida'),
-    chamada: document.getElementById('tocador-chamada-texto').textContent,
-    festa: document.getElementById('tocador-festa').textContent,
-    faixa: document.getElementById('tocador-faixa').textContent,
-    espera: document.getElementById('tocador').classList.contains('tocador--espera'),
-    barras: document.querySelectorAll('#tocador-eq i').length,
+    somNaTela: !document.getElementById('som').classList.contains('escondida'),
     tocando: !audio.paused,
+    faixa: Boolean(faixaAtual),
   }));
-  check(naEspera.visivel && naEspera.espera, 'na sala de espera o tocador aparece em modo de espera');
-  check(/espera/i.test(naEspera.chamada), `com a chamada certa ("${naEspera.chamada.trim()}")`);
-  check(/EDM/.test(naEspera.festa), `dizendo qual festa está rolando (${naEspera.festa})`);
-  check(naEspera.faixa.includes('—'), `e qual música está tocando (${naEspera.faixa})`);
-  check(naEspera.barras === 4, 'o equalizador tem as quatro barrinhas');
-  check(naEspera.tocando, 'e a música toca de verdade enquanto se espera');
-  await ana.screenshot({ path: path.join(raiz, 'shot-tocador-espera.png') });
+  check(!naEspera.somNaTela, 'na sala de espera não aparece player nenhum');
+  check(!naEspera.tocando && !naEspera.faixa, 'e nada de música tocando enquanto se espera');
+  await ana.screenshot({ path: path.join(raiz, 'shot-sala-sem-musica.png') });
 
   // ============================================ 3. a partida começa
   await entrarNoJogo(bruno, 'BrunoR');
@@ -118,13 +111,18 @@ const esperarReacao = (pagina, emoji, limite = 4000) =>
   await ana.click('#btn-comecar');
   await espera(1200);
 
-  const naMesa = await ana.evaluate(() => ({
-    chamada: document.getElementById('tocador-chamada-texto').textContent.trim(),
-    espera: document.getElementById('tocador').classList.contains('tocador--espera'),
-    visivel: !document.getElementById('tocador').classList.contains('escondida'),
+  const noJogo = await ana.evaluate(() => ({
+    visivel: !document.getElementById('som').classList.contains('escondida'),
+    dentroDoBar: Boolean(document.querySelector('.zona--bar #som')),
+    estado: document.getElementById('som-estado').textContent.trim(),
+    festa: document.getElementById('som-festa').textContent.trim(),
+    faixa: document.getElementById('som-faixa').textContent.trim(),
+    tocando: !audio.paused,
   }));
-  check(naMesa.visivel && !naMesa.espera, 'com a partida rolando o tocador continua, mas discreto');
-  check(/tocando|pausado/i.test(naMesa.chamada), `a chamada encolhe (“${naMesa.chamada}”)`);
+  check(noJogo.visivel && noJogo.dentroDoBar, 'a partida começou: a música aparece dentro do painel do BAR');
+  check(/tocando/i.test(noJogo.estado), `com o estado à vista (“${noJogo.estado}”)`);
+  check(/EDM/.test(noJogo.festa) && noJogo.faixa.includes('—'), `festa e música identificadas (${noJogo.festa} · ${noJogo.faixa})`);
+  check(noJogo.tocando, 'e a música tocando de verdade');
 
   // ============================================ 4. não é chat
   const campos = await ana.evaluate(() => {
@@ -200,16 +198,16 @@ const esperarReacao = (pagina, emoji, limite = 4000) =>
   );
 
   // ============================================ 7. clicou, apareceu na hora
-  const relogioDoClique = await ana.evaluate(async () => {
+  const relogioDoClique = await ana.evaluate(() => {
     const antes = performance.now();
     document.querySelector('.reacao-opcao[data-emoji="😂"]').click();
-    // Sem esperar a rede: a reação tem que estar no DOM já no próximo quadro.
-    await new Promise((r) => requestAnimationFrame(r));
+    // NADA de await aqui: a contagem é lida no mesmo instante do clique. Se a
+    // reação dependesse de uma volta pela rede, este número seria zero.
     return { ms: performance.now() - antes, quantas: document.querySelectorAll('.reacao').length };
   });
   check(
-    relogioDoClique.quantas === 1 && relogioDoClique.ms < 120,
-    `a reação aparece na hora para quem clicou (${Math.round(relogioDoClique.ms)}ms)`
+    relogioDoClique.quantas === 1,
+    `a reação aparece na hora para quem clicou, sem esperar a rede (${Math.round(relogioDoClique.ms)}ms)`
   );
   check(await ana.locator('#reacoes-bandeja').isHidden(), 'e a bandeja se fecha sozinha depois do clique');
 

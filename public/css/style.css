@@ -48,10 +48,6 @@
   /* A coluna das reacoes no rodape. Em um lugar so porque o modo espectador
      (que esconde a mao) precisa repetir a mesma medida. */
   --reacoes-l: 208px;
-  /* A largura do tocador. E variavel porque o rodape reserva esse espaco para
-     nao ficar embaixo dele - e numa janela menor os dois encolhem juntos, senao
-     as "Ultimas jogadas" ficariam com um filete de largura. */
-  --tocador-l: 268px;
 }
 
 * { box-sizing: border-box; }
@@ -525,11 +521,6 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   .mesa, .rodape { grid-template-columns: 1fr; }
   .pista { width: 100%; }
   #fila { overflow-x: auto; }
-  /* Aqui o jogo inteiro já virou uma coluna e a página rola: o tocador vira uma
-     faixa de canto a canto embaixo, e o rodapé não precisa mais guardar espaço
-     ao lado dele. */
-  .tocador { left: 8px; right: 8px; bottom: 8px; width: auto; }
-  .com-tocador .rodape { padding-right: 0; padding-bottom: 124px; }
   .reacoes-bandeja { left: 0; right: 0; width: auto; grid-template-columns: repeat(8, 1fr); }
 }
 
@@ -588,106 +579,107 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .festa-nome { font-weight: 600; line-height: 1.2; }
 .festas-dica { margin: .5rem 0 0; font-size: .7rem; color: var(--suave); }
 
-/* ============================== O TOCADOR ==============================
-   Canto de baixo, à direita, pequeno. Fica por cima de tudo porque a música
-   atravessa as telas: começa na sala de espera e continua na mesa.
+/* ========================== O SOM DO BAR ==========================
+   A música NÃO é uma caixinha por cima do jogo. Ela mora no rodapé do painel
+   do BAR, que é de onde a festa está vindo - o áudio já é abafado, de quem
+   ouve do lado de fora, e a tela conta a mesma história.
 
-   NÃO É "UM PLAYER EM CIMA DO JOGO". A ideia é a festa que já está rolando lá
-   dentro enquanto você espera na porta - por isso o fundo puxa a madeira do bar
-   e a luz quente da entrada, e não o cinza dos painéis. A hierarquia é
-   deliberada, de cima para baixo:
+   Por que aqui e não flutuando no canto: no canto ela era mais um widget, e
+   ainda por cima obrigava o rodapé a reservar espaço para não ficar embaixo
+   dela. Dentro do painel do bar ela não cobre absolutamente nada - é irmã das
+   cartas na mesma coluna, e as cartas do bar já rolam por dentro.
 
-     1. a chamada ("Enquanto você espera…") - pequena, com o equalizador
-     2. QUAL FESTA - dourado, o maior peso da caixa
-     3. QUAL MÚSICA - branco, logo abaixo
-     4. os controles - miúdos, no rodapé da caixa, atrás de uma linha
-
-   Os dois do meio são o assunto; o resto é moldura. O tamanho todo continua o
-   mesmo de antes: cabe no canto e não encosta em carta nenhuma. */
-.tocador {
-  position: fixed; right: 14px; bottom: 14px; z-index: 55;
-  width: var(--tocador-l); border-radius: 14px; overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(53, 38, 26, .96), rgba(25, 31, 43, .96));
-  border: 1px solid var(--borda);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .55);
-  backdrop-filter: blur(6px);
-  transition: border-color .35s ease, box-shadow .35s ease;
+   COMPACTO por padrão (estado, festa, música, equalizador). Clicar abre os
+   controles. Fechado tem ~64px de altura; a coluna do bar tem centenas. */
+.som {
+  flex: none; margin-top: .5rem; position: relative; overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(242, 177, 52, .2);
+  background: linear-gradient(180deg, rgba(61, 44, 24, .8), rgba(29, 26, 22, .55));
+  transition: border-color .4s ease, box-shadow .4s ease;
 }
-/* A luz da porta do bar vazando por cima da caixa. Acende quando a música toca:
-   dá para saber que a festa está rolando sem ler uma palavra. */
-.tocador::after {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 74px;
-  background: radial-gradient(70% 100% at 50% 0%, var(--luz-porta), transparent 72%);
-  opacity: .18; transition: opacity .5s ease; pointer-events: none;
+/* A luz da festa vazando pela porta do bar. Acende quando a música toca: dá
+   para saber que a festa está rolando sem ler nada. */
+.som::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 60%;
+  background: radial-gradient(80% 100% at 15% 100%, var(--luz-porta), transparent 70%);
+  opacity: .12; transition: opacity .6s ease; pointer-events: none;
 }
-.tocador--tocando::after { opacity: .5; }
+.som--tocando { border-color: rgba(242, 177, 52, .42); }
+.som--tocando::before { opacity: .34; }
 
-.tocador-barra { height: 3px; background: #10141d; }
-#tocador-progresso { display: block; height: 100%; width: 0; background: var(--neon); transition: width .25s linear; }
-.tocador-corpo { position: relative; padding: .5rem .65rem .55rem; }
+/* A face compacta é o botão: a área toda é clicável, e não um ícone minúsculo. */
+.som-face {
+  position: relative; z-index: 1;
+  display: grid; gap: .1rem; width: 100%; text-align: left;
+  padding: .45rem .55rem .4rem; border: 0; background: transparent;
+  cursor: pointer; font: inherit; color: inherit;
+}
+.som-face:hover { background: rgba(255, 186, 84, .06); }
 
-/* A chamada. Some do caminho quando a partida começa (vira só "Tocando"), mas
-   nunca desaparece: é ela que diz que a música faz parte da espera. */
-.tocador-chamada {
-  display: flex; align-items: center; gap: .4rem; margin: 0 0 .3rem; min-width: 0;
-  font-size: .6rem; font-weight: 800; letter-spacing: .1em;
+.som-estado {
+  font-size: .58rem; font-weight: 800; letter-spacing: .14em;
   text-transform: uppercase; color: var(--suave);
-  transition: color .35s ease;
 }
-/* A frase mais longa ("Enquanto você espera…") encostava na borda direita da
-   caixa. Cortar com reticências é melhor do que espremer a caixa inteira. */
-#tocador-chamada-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tocador--espera .tocador-chamada { color: var(--neon-quente); }
-
-/* O equalizador. Quatro barrinhas que só mexem quando a música mexe - é o sinal
-   de "está tocando" mais barato e mais claro que existe. Pausou, elas param no
-   lugar em vez de sumir, e a caixa não dá um salto. */
-.eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; }
-.eq i {
-  width: 2px; height: 100%; border-radius: 1px; background: currentColor;
-  transform: scaleY(.28); transform-origin: bottom;
-  animation: eq-pula .9s ease-in-out infinite; animation-play-state: paused;
-}
-.eq i:nth-child(2) { animation-duration: .7s;  animation-delay: -.2s; }
-.eq i:nth-child(3) { animation-duration: 1.1s; animation-delay: -.5s; }
-.eq i:nth-child(4) { animation-duration: .8s;  animation-delay: -.35s; }
-.tocador--tocando .eq i { animation-play-state: running; }
-@keyframes eq-pula { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
-
-.tocador-textos { min-width: 0; margin-bottom: .45rem; }
-/* O QUE MAIS IMPORTA, parte 1: a festa. */
-.tocador-festa {
-  margin: 0; font-size: .88rem; font-weight: 800; color: var(--neon);
-  line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* O QUE MAIS IMPORTA, parte 2: a música. */
-.tocador-faixa {
-  margin: .1rem 0 0; font-size: .78rem; color: var(--texto);
+.som--tocando .som-estado { color: var(--neon-quente); }
+/* O QUE MAIS IMPORTA: que festa está rolando e que música está tocando. */
+.som-festa {
+  font-size: .82rem; font-weight: 800; color: var(--neon); line-height: 1.15;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Uma linha separa o assunto dos controles: dá para bater o olho e ler só a
-   parte de cima. */
-.tocador-botoes {
-  display: flex; align-items: center; gap: .3rem;
-  padding-top: .45rem; border-top: 1px solid rgba(255, 255, 255, .07);
+.som-faixa {
+  font-size: .72rem; color: var(--texto); line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.tocador-botoes .redondo { width: 26px; height: 26px; font-size: .72rem; }
-#tocador-volume { flex: 1; min-width: 0; margin-left: .2rem; accent-color: var(--neon); height: 3px; }
-.tocador--tocando { border-color: rgba(242, 177, 52, .45); }
+/* Aberto, o nome da música aparece inteiro em vez de cortar - é uma das coisas
+   que se ganha ao expandir. */
+.som--aberto .som-faixa { white-space: normal; overflow: visible; }
 
-/* O tocador flutua, então o rodapé abre espaço para ele em vez de deixá-lo
-   sentar em cima das "Últimas jogadas". A conta é a largura da caixa + a
-   distância dela até a borda + uma folga. Só vale quando há música: sem
-   arquivo nenhum na pasta das festas, o tocador não existe e o registro fica
-   com a linha inteira. */
-.com-tocador .rodape { padding-right: calc(var(--tocador-l) + 14px + 12px); }
-/* Na espera o contorno é mais quente: a caixa "chama" um pouco mais na sala,
-   onde não há partida disputando atenção, e recua na mesa. */
-.tocador--espera.tocador--tocando {
-  border-color: rgba(255, 159, 67, .55);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .55), 0 0 22px rgba(255, 159, 67, .12);
+/* A ONDA DO SOM. Barrinhas que atravessam o bloco de ponta a ponta, como o som
+   saindo do bar. Elas só mexem enquanto a música mexe; pausou, param onde estão
+   em vez de sumir - assim a caixa não dá salto nenhum.
+
+   As durações e os atrasos se repetem de cinco em cinco (nth-child(5n+k)): é o
+   que faz a onda parecer irregular sem precisar de uma regra por barrinha. */
+/* Barras finas e coladas, num grupo à esquerda - e não esticadas de ponta a
+   ponta. Esticadas, cada barra ficava com 20px de largura e o resultado parecia
+   um gráfico de barras, não uma onda de som. */
+.eq { display: flex; align-items: flex-end; gap: 3px; height: 12px; margin-top: .22rem; }
+.eq i {
+  flex: 0 0 4px; height: 100%; border-radius: 1px;
+  background: linear-gradient(180deg, var(--neon), rgba(242, 177, 52, .3));
+  transform: scaleY(.16); transform-origin: bottom; opacity: .5;
+  animation: eq-pula .9s ease-in-out infinite; animation-play-state: paused;
 }
+.eq i:nth-child(5n + 2) { animation-duration: .62s;  animation-delay: -.18s; }
+.eq i:nth-child(5n + 3) { animation-duration: 1.05s; animation-delay: -.5s; }
+.eq i:nth-child(5n + 4) { animation-duration: .78s;  animation-delay: -.32s; }
+.eq i:nth-child(5n + 5) { animation-duration: 1.2s;  animation-delay: -.66s; }
+.som--tocando .eq i { animation-play-state: running; opacity: 1; }
+@keyframes eq-pula { 0%, 100% { transform: scaleY(.14); } 50% { transform: scaleY(1); } }
+
+/* MÚSICA NOVA: um brilho curto na caixa, o nome entrando de baixo e o
+   equalizador recomeçando. É o "trocaram a música lá dentro". */
+.som--nova { animation: som-brilho 1.4s ease-out; }
+.som--nova .som-faixa { animation: som-entra .5s ease-out; }
+.som--nova .eq i { animation-name: eq-pula, som-acende; animation-duration: .9s, 1.4s; }
+@keyframes som-brilho {
+  0% { border-color: rgba(255, 200, 120, .9); box-shadow: 0 0 22px rgba(255, 186, 84, .35); }
+  100% { border-color: rgba(242, 177, 52, .42); box-shadow: 0 0 0 rgba(255, 186, 84, 0); }
+}
+@keyframes som-entra {
+  0% { opacity: 0; transform: translateY(7px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes som-acende { 0% { opacity: .3; } 100% { opacity: 1; } }
+
+/* OS CONTROLES, só quando o jogador pede. */
+.som-controles { position: relative; z-index: 1; padding: 0 .55rem .5rem; }
+.som-barra { height: 3px; border-radius: 2px; background: rgba(0, 0, 0, .45); overflow: hidden; }
+#som-progresso { display: block; height: 100%; width: 0; background: var(--neon); transition: width .25s linear; }
+.som-botoes { display: flex; align-items: center; gap: .3rem; margin-top: .45rem; }
+.som-botoes .redondo { width: 26px; height: 26px; font-size: .72rem; }
+#som-volume { flex: 1; min-width: 0; margin-left: .2rem; accent-color: var(--neon); height: 3px; }
 
 #btn-mudo svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 #btn-mudo .alto-falante { fill: currentColor; stroke-linejoin: round; }
@@ -813,17 +805,15 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 }
 
 @media (max-width: 1240px) {
-  :root { --reacoes-l: 168px; --tocador-l: 232px; }
+  :root { --reacoes-l: 168px; }
   .reacoes-bandeja { grid-template-columns: repeat(5, 1fr); }
 }
 @media (max-width: 1100px) {
-  :root { --reacoes-l: 132px; --tocador-l: 204px; }
-  /* Numa janela pequena o tocador vira o essencial: que festa, que música e o
-     play. O volume some do caixote - quem quiser mexer usa o do computador. */
-  .tocador-chamada { font-size: .56rem; letter-spacing: .06em; }
-  .tocador-festa { font-size: .8rem; }
-  .tocador-faixa { font-size: .72rem; }
-  #tocador-volume { display: none; }
+  :root { --reacoes-l: 146px; }
+  /* Numa janela pequena o som do bar fica ainda mais discreto. */
+  .som-festa { font-size: .76rem; }
+  .som-faixa { font-size: .68rem; }
+  .eq { height: 8px; }
   .reacoes-bandeja { grid-template-columns: repeat(4, 1fr); left: -30px; right: auto; width: 152px; }
   .reacoes-palco { min-height: 70px; }
   .reacao { width: 70px; margin-left: -35px; }
@@ -1655,11 +1645,6 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   .centro, .ranking, .lateral {
     width: min(460px, 100%); flex: 0 0 auto; align-self: center;
   }
-  /* A faixa de canto a canto SAIU daqui. Ela fazia sentido pensando só no menu,
-     mas o tocador é fixo e aparece em todas as telas: numa janela de 1200px a
-     faixa passava por cima das cartas da mão e chegou a roubar o clique delas.
-     De canto a canto só quando o jogo inteiro já empilhou e rola a página
-     (abaixo de 820px) - ver a regra mais abaixo. */
   .centro { max-height: none; overflow: visible; }
   .ranking { max-height: none; }
 }

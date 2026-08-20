@@ -11,15 +11,14 @@
 // Festa sem arquivo nenhum não aparece para escolher - melhor não oferecer do
 // que oferecer silêncio.
 //
-// QUANDO A MÚSICA TOCA: da sala de espera em diante. Escolher a festa no menu
-// é só escolher - nada começa a tocar ali. A música entra quando você já está
-// do lado de dentro: esperando na sala e depois na mesa. Ao voltar para o menu
-// principal, ela para. O menu é silêncio; a espera e a mesa são festa.
+// QUANDO A MÚSICA TOCA: só dentro da partida. Escolher a festa no menu é só
+// escolher - nada toca ali, e não existe player nenhum no menu nem na sala de
+// espera. A música começa quando a partida começa e para quando o jogador sai
+// da mesa. Menu e espera são silêncio; a mesa é a festa.
 //
-// É por isso que o tocador diz "Enquanto você espera…" na sala: aquele é
-// literalmente o momento de esperar a porta do bar abrir. Com a partida
-// rolando a chamada encolhe para um "Tocando" discreto - a mesma festa, agora
-// sem roubar atenção do jogo.
+// ONDE ELA APARECE: no rodapé do painel do BAR, e não numa caixinha flutuando
+// por cima do jogo. O áudio já é abafado, de quem ouve do lado de fora; a tela
+// conta a mesma história - a música está vindo do bar. Ver #som no index.html.
 //
 // A ORDEM: sorteio por "saco de bolas". Embaralha as faixas, toca uma a uma até
 // acabar o saco, e só então embaralha de novo - garantindo que todas tocam
@@ -36,9 +35,8 @@ let FESTAS = [];          // o catálogo que veio do servidor
 let festaAtual = null;    // a festa escolhida
 let saco = [];            // as faixas ainda não tocadas nesta rodada
 let faixaAtual = null;
-// Em qual tela o jogador está: '' (menu, silêncio), 'sala' (esperando) ou
-// 'jogo' (partida rolando). Quem avisa é mostrarTela, em render.js.
-let ondeEstou = '';
+let naMesa = false;       // só na mesa existe música - quem avisa é mostrarTela
+let aberto = false;       // os controles estão expandidos?
 
 const audio = new Audio();
 audio.preload = 'none';
@@ -83,7 +81,7 @@ async function carregarMusica() {
   encherOSaco();
 
   desenharEscolhaDeFesta();
-  pintarTocador();
+  pintarSom();
 }
 
 // ------------------------------------------------------------ reprodução
@@ -98,19 +96,48 @@ function proximaFaixa(comecarTocando = true) {
   audio.src = faixaAtual.url;
   audio.load();
   if (comecarTocando) tentarTocar();
-  pintarTocador();
+  pintarSom();
+  anunciarTroca();
+}
+
+// A MICROINTERAÇÃO DA TROCA. Quando entra uma música nova, o bloco do bar dá um
+// brilho curto, o nome da faixa entra deslizando e o equalizador recomeça do
+// zero. É o "alguém trocou a música lá dentro" - dura menos de um segundo e a
+// classe sai sozinha, para poder acontecer de novo na faixa seguinte.
+let tempoDaTroca = null;
+function anunciarTroca() {
+  const caixa = $('som');
+  if (!caixa || caixa.classList.contains('escondida')) return;
+  caixa.classList.remove('som--nova');
+  void caixa.offsetWidth; // reinicia a animação mesmo em trocas seguidas
+  caixa.classList.add('som--nova');
+  clearTimeout(tempoDaTroca);
+  tempoDaTroca = setTimeout(() => caixa.classList.remove('som--nova'), 1400);
 }
 
 // O navegador só deixa tocar áudio depois de um clique em algum lugar da
 // página. Se ele recusar, não é erro: guardamos para tocar no próximo clique.
+//
+// MAS NEM TODA RECUSA É BLOQUEIO. Quando uma faixa entra por cima de outra -
+// e isso acontece toda partida, porque tocar() começa uma música e logo em
+// seguida sortearMusica() sorteia outra - o pedido antigo é cancelado com
+// AbortError. Tratar isso como bloqueio deixava o indicador escrito "Pausado"
+// com a música tocando alto, até alguém clicar em qualquer lugar da tela.
 function tentarTocar() {
   const promessa = audio.play();
-  if (promessa && promessa.catch) {
-    promessa.catch(() => {
+  if (!promessa || !promessa.catch) return;
+
+  promessa
+    .then(() => {
+      esperandoUmClique = false;
+      pintarSom();
+    })
+    .catch((erro) => {
+      // Pedido atropelado por outro, ou música que já está tocando: não é bloqueio.
+      if ((erro && erro.name === 'AbortError') || !audio.paused) return;
       esperandoUmClique = true;
-      pintarTocador();
+      pintarSom();
     });
-  }
 }
 
 let esperandoUmClique = false;
@@ -120,7 +147,7 @@ document.addEventListener(
     if (!esperandoUmClique || !faixaAtual) return;
     esperandoUmClique = false;
     tentarTocar();
-    pintarTocador();
+    pintarSom();
   },
   { capture: true }
 );
@@ -136,8 +163,8 @@ audio.addEventListener('error', () => {
 });
 
 audio.addEventListener('timeupdate', pintarProgresso);
-audio.addEventListener('play', pintarTocador);
-audio.addEventListener('pause', pintarTocador);
+audio.addEventListener('play', pintarSom);
+audio.addEventListener('pause', pintarSom);
 
 // Escolher a festa no menu. NÃO toca nada: só guarda a escolha e prepara a
 // ordem. Quem começa a festa é a partida.
@@ -150,29 +177,27 @@ function escolherFesta(id) {
   faixaAtual = null;
   encherOSaco();
   desenharEscolhaDeFesta();
-  pintarTocador();
+  pintarSom();
   return true;
 }
 
-// Entrou (na sala de espera ou na mesa): a festa começa.
-function tocar(onde = 'jogo') {
-  ondeEstou = onde;
+// Entrou na mesa: a festa começa.
+function tocar() {
+  naMesa = true;
   if (festaAtual) {
     if (!faixaAtual) proximaFaixa(true);
     else if (audio.paused && preferencias.musicaLigada()) tentarTocar();
   }
-  // Sempre repinta: da sala para a mesa a música não muda, mas a chamada do
-  // tocador sim ("Enquanto você espera…" vira "Tocando"). Sem esta linha, o
-  // tocador ficava com o texto da tela anterior até a faixa trocar.
-  pintarTocador();
+  pintarSom();
 }
 
 // Saiu da mesa: a festa para. Sem isso a música continuaria no menu, e o menu
 // não é festa.
 function parar() {
-  ondeEstou = '';
+  naMesa = false;
+  aberto = false; // ao voltar, o som recomeça compacto
   audio.pause();
-  pintarTocador();
+  pintarSom();
 }
 
 // Partida nova: ordem nova. É o que garante que duas partidas seguidas não
@@ -187,7 +212,7 @@ function alternarPausa() {
   if (!faixaAtual) return proximaFaixa(true);
   if (audio.paused) tentarTocar();
   else audio.pause();
-  pintarTocador();
+  pintarSom();
 }
 
 function alternarMudo() {
@@ -195,7 +220,7 @@ function alternarMudo() {
   preferencias.definirMusica(ligada);
   audio.muted = !ligada;
   if (ligada && faixaAtual && audio.paused) tentarTocar();
-  pintarTocador();
+  pintarSom();
   return ligada;
 }
 
@@ -243,64 +268,64 @@ function desenharEscolhaDeFesta() {
   }
 }
 
-// O tocador: pequeno, no canto, com o essencial. Ele aparece só quando existe
-// festa para tocar.
-function pintarTocador() {
-  const caixa = $('tocador');
+// O SOM DO BAR.
+//
+// Compacto por padrão: estado, festa, música e o equalizador. Os controles só
+// aparecem quando o jogador clica - a música é ambientação, não um aplicativo,
+// e seis botões sempre à vista competiriam com as cartas.
+function pintarSom() {
+  const caixa = $('som');
   if (!caixa) return;
 
-  // O tocador acompanha a música: no menu principal ele não aparece, porque ali
-  // não toca nada.
-  const temMusica = Boolean(ondeEstou && festaAtual && festaAtual.total && faixaAtual);
+  // Só existe som na mesa. No menu e na sala de espera nem o bloco aparece,
+  // porque ali não toca nada.
+  const temMusica = Boolean(naMesa && festaAtual && festaAtual.total && faixaAtual);
   caixa.classList.toggle('escondida', !temMusica);
-  // O tocador flutua por cima da página, e no canto de baixo à direita quem
-  // está embaixo dele é o bloco das "Últimas jogadas". Esta classe faz o rodapé
-  // guardar o espaço dele - assim o registro encolhe um pouco em vez de ficar
-  // escondido atrás da caixa. Sai junto quando não há música nenhuma, para não
-  // reservar espaço para um tocador que nem aparece.
-  document.body.classList.toggle('com-tocador', temMusica);
   if (!temMusica) return;
 
-  // A INFORMAÇÃO PRINCIPAL, nesta ordem: que festa está rolando, que música
-  // está tocando. Os controles vêm depois, menores.
-  $('tocador-festa').textContent = `${festaAtual.emoji} ${festaAtual.nome}`;
-  $('tocador-faixa').textContent = faixaAtual
-    ? [faixaAtual.artista, faixaAtual.titulo].filter(Boolean).join(' — ')
-    : 'toque para começar a festa';
-
-  // "Tocando" quer dizer que a música está andando. Mudo não é pausa: o botão
-  // do alto-falante já conta essa parte, e trocar o ▶/❚❚ por causa do mudo faria
-  // o botão mentir sobre o que ele vai fazer no clique.
   const tocando = Boolean(faixaAtual) && !audio.paused && !esperandoUmClique;
-  $('tocador-play').textContent = tocando ? '❚❚' : '▶';
-  $('tocador-play').title = tocando ? 'Pausar' : 'Tocar';
-  caixa.classList.toggle('tocador--tocando', tocando);
+  caixa.classList.toggle('som--tocando', tocando);
 
-  // A CHAMADA. Na sala de espera ela aparece por extenso: é literalmente o
-  // momento de esperar a porta abrir, e a música faz parte dessa espera. Com a
-  // partida rolando ela vira só "Tocando", para não competir com o jogo.
-  const esperando = ondeEstou === 'sala';
-  caixa.classList.toggle('tocador--espera', esperando);
-  const chamada = $('tocador-chamada-texto');
-  if (chamada) {
-    chamada.textContent = esperando
-      ? 'Enquanto você espera…'
-      : tocando ? 'Tocando' : 'Pausado';
-  }
+  // O estado em uma palavra. É ele que manda no equalizador: parou a música,
+  // param as barrinhas.
+  $('som-estado').textContent = tocando ? '🎵 Tocando' : '🎵 Pausado';
+  $('som-festa').textContent = `${festaAtual.emoji} ${festaAtual.nome}`;
+  $('som-faixa').textContent = [faixaAtual.artista, faixaAtual.titulo]
+    .filter(Boolean)
+    .join(' — ');
+  // No compacto o nome fica numa linha só e corta com reticências; aberto, ele
+  // aparece inteiro - é uma das coisas que se ganha ao expandir.
+  $('som-faixa').title = $('som-faixa').textContent;
+
+  $('som-play').textContent = tocando ? '❚❚' : '▶';
+  $('som-play').title = tocando ? 'Pausar' : 'Tocar';
 
   const btnMudo = $('btn-mudo');
   if (btnMudo) {
     btnMudo.classList.toggle('mudo', !preferencias.musicaLigada());
     btnMudo.title = preferencias.musicaLigada() ? 'Desligar a música' : 'Ligar a música';
   }
-  const volume = $('tocador-volume');
+  const volume = $('som-volume');
   if (volume && document.activeElement !== volume) volume.value = String(audio.volume);
 
   pintarProgresso();
 }
 
+// Abrir e fechar os controles. Um clique no bloco compacto abre; outro fecha.
+function alternarControles(abrir = !aberto) {
+  aberto = abrir;
+  const caixa = $('som');
+  if (!caixa) return aberto;
+  caixa.classList.toggle('som--aberto', aberto);
+  $('som-controles').classList.toggle('escondida', !aberto);
+  $('som-face').setAttribute('aria-expanded', String(aberto));
+  $('som-face').title = aberto ? 'Esconder os controles' : 'Controles da música';
+  pintarSom();
+  return aberto;
+}
+
 function pintarProgresso() {
-  const barra = $('tocador-progresso');
+  const barra = $('som-progresso');
   if (!barra) return;
   const parte = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
   barra.style.width = `${Math.min(100, Math.max(0, parte))}%`;
