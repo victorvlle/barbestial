@@ -12,6 +12,7 @@ const {
   LIMITE_DO_TURNO_MS,
 } = require('../game/gameState');
 const ranking = require('../dados/ranking');
+const reacoes = require('../game/reacoes');
 
 // Um relogio por sala. Se o jogador da vez nao jogar dentro do limite, o
 // servidor joga uma carta qualquer por ele - senao a partida inteira trava
@@ -113,6 +114,31 @@ function agendarRelogio(io, s) {
   );
 }
 
+// ----------------------------------------------------------------- reacoes
+//
+// Uma reacao e um evento passageiro: sai de um jogador, aparece na tela da sala
+// e some. NAO passa pelo banco, nao entra no log da partida, nao vira historico
+// - depois que a animacao acaba ela nao existe em lugar nenhum.
+//
+// O ritmo de cada socket fica aqui, em memoria. Sem isso, um clique nervoso (ou
+// um `for` no console de alguem) enche a tela de todo mundo. Guardamos so os
+// horarios dos ultimos envios, e o proprio disconnect limpa a entrada.
+const ritmoDasReacoes = new Map();
+
+function podeReagir(socketId) {
+  const agora = Date.now();
+  const recentes = (ritmoDasReacoes.get(socketId) || []).filter(
+    (quando) => agora - quando < reacoes.LIMITE.janelaMs
+  );
+  if (recentes.length >= reacoes.LIMITE.quantas) {
+    ritmoDasReacoes.set(socketId, recentes);
+    return false;
+  }
+  recentes.push(agora);
+  ritmoDasReacoes.set(socketId, recentes);
+  return true;
+}
+
 // Envolve cada handler para que um erro previsto vire uma resposta amigavel,
 // e um erro inesperado apareca no console do servidor em vez de derrubar tudo.
 function responder(acao, resposta) {
@@ -181,6 +207,36 @@ module.exports = function registrarHandlers(io, socket) {
     }, resposta);
   });
 
+  // REAGIR: o unico jeito de um jogador mandar alguma coisa para outro.
+  //
+  // Repare no que NAO existe aqui: nenhum campo de texto, nenhum `mensagem`,
+  // nada que o jogador escreva. So um emoji, e so se ele estiver na lista
+  // fechada de server/game/reacoes.js. Isso e o que impede que alguem use o
+  // console do navegador para escrever qualquer coisa na tela dos outros.
+  //
+  // O nome que aparece na reacao vem do cracha da sessao, igual as jogadas -
+  // nunca do que o navegador mandou. Nao da para reagir no lugar de outro.
+  socket.on('reagir', ({ emoji } = {}, resposta) => {
+    responder(() => {
+      const achado = sala.salaDoSocket(socket.id);
+      if (!achado) throw new sala.ErroDeSala('Você não está em nenhuma sala.');
+      // Espectador ve as reacoes, mas nao manda: quem esta do lado de fora do
+      // jogo nao interfere na partida, nem para brincar.
+      if (achado.espectador) throw new sala.ErroDeSala('Você está assistindo, não jogando.');
+      if (!reacoes.existe(emoji)) throw new sala.ErroDeSala('Essa reação não existe.');
+      if (!podeReagir(socket.id)) throw new sala.ErroDeSala('Calma com as reações.');
+
+      io.to(achado.sala.codigo).emit('reacao', {
+        emoji,
+        jogadorId: achado.jogador.id,
+        nome: achado.jogador.nome,
+        cor: achado.jogador.cor,
+        quando: Date.now(),
+      });
+      return {};
+    }, resposta);
+  });
+
   // Revanche: todo mundo precisa topar. Um "nao" desfaz a sala inteira.
   socket.on('revanche', ({ quer } = {}, resposta) => {
     responder(() => {
@@ -227,6 +283,7 @@ module.exports = function registrarHandlers(io, socket) {
   });
 
   socket.on('disconnect', () => {
+    ritmoDasReacoes.delete(socket.id); // nada de memoria orfa por socket que caiu
     const saida = sala.desconectar(socket.id);
     if (!saida) return;
     if (sala.salaPorCodigo(saida.sala.codigo)) avisarSala(io, saida.sala);

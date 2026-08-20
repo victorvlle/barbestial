@@ -11,9 +11,15 @@
 // Festa sem arquivo nenhum não aparece para escolher - melhor não oferecer do
 // que oferecer silêncio.
 //
-// QUANDO A MÚSICA TOCA: só dentro da partida. Escolher a festa no menu é só
-// escolher - nada começa a tocar ali. Ao sair da mesa para o menu, a música
-// para. É o comportamento que o jogo pede: o menu é silêncio, a mesa é festa.
+// QUANDO A MÚSICA TOCA: da sala de espera em diante. Escolher a festa no menu
+// é só escolher - nada começa a tocar ali. A música entra quando você já está
+// do lado de dentro: esperando na sala e depois na mesa. Ao voltar para o menu
+// principal, ela para. O menu é silêncio; a espera e a mesa são festa.
+//
+// É por isso que o tocador diz "Enquanto você espera…" na sala: aquele é
+// literalmente o momento de esperar a porta do bar abrir. Com a partida
+// rolando a chamada encolhe para um "Tocando" discreto - a mesma festa, agora
+// sem roubar atenção do jogo.
 //
 // A ORDEM: sorteio por "saco de bolas". Embaralha as faixas, toca uma a uma até
 // acabar o saco, e só então embaralha de novo - garantindo que todas tocam
@@ -30,7 +36,9 @@ let FESTAS = [];          // o catálogo que veio do servidor
 let festaAtual = null;    // a festa escolhida
 let saco = [];            // as faixas ainda não tocadas nesta rodada
 let faixaAtual = null;
-let naTelaDoJogo = false;
+// Em qual tela o jogador está: '' (menu, silêncio), 'sala' (esperando) ou
+// 'jogo' (partida rolando). Quem avisa é mostrarTela, em render.js.
+let ondeEstou = '';
 
 const audio = new Audio();
 audio.preload = 'none';
@@ -146,18 +154,23 @@ function escolherFesta(id) {
   return true;
 }
 
-// Entrou na mesa: a festa começa.
-function tocar() {
-  naTelaDoJogo = true;
-  if (!festaAtual) return;
-  if (!faixaAtual) proximaFaixa(true);
-  else if (audio.paused && preferencias.musicaLigada()) tentarTocar();
+// Entrou (na sala de espera ou na mesa): a festa começa.
+function tocar(onde = 'jogo') {
+  ondeEstou = onde;
+  if (festaAtual) {
+    if (!faixaAtual) proximaFaixa(true);
+    else if (audio.paused && preferencias.musicaLigada()) tentarTocar();
+  }
+  // Sempre repinta: da sala para a mesa a música não muda, mas a chamada do
+  // tocador sim ("Enquanto você espera…" vira "Tocando"). Sem esta linha, o
+  // tocador ficava com o texto da tela anterior até a faixa trocar.
+  pintarTocador();
 }
 
 // Saiu da mesa: a festa para. Sem isso a música continuaria no menu, e o menu
 // não é festa.
 function parar() {
-  naTelaDoJogo = false;
+  ondeEstou = '';
   audio.pause();
   pintarTocador();
 }
@@ -236,21 +249,44 @@ function pintarTocador() {
   const caixa = $('tocador');
   if (!caixa) return;
 
-  // O tocador é da mesa, igual à música: no menu ele não aparece, porque no
-  // menu não toca nada.
-  const temMusica = Boolean(naTelaDoJogo && festaAtual && festaAtual.total && faixaAtual);
+  // O tocador acompanha a música: no menu principal ele não aparece, porque ali
+  // não toca nada.
+  const temMusica = Boolean(ondeEstou && festaAtual && festaAtual.total && faixaAtual);
   caixa.classList.toggle('escondida', !temMusica);
+  // O tocador flutua por cima da página, e no canto de baixo à direita quem
+  // está embaixo dele é o bloco das "Últimas jogadas". Esta classe faz o rodapé
+  // guardar o espaço dele - assim o registro encolhe um pouco em vez de ficar
+  // escondido atrás da caixa. Sai junto quando não há música nenhuma, para não
+  // reservar espaço para um tocador que nem aparece.
+  document.body.classList.toggle('com-tocador', temMusica);
   if (!temMusica) return;
 
+  // A INFORMAÇÃO PRINCIPAL, nesta ordem: que festa está rolando, que música
+  // está tocando. Os controles vêm depois, menores.
   $('tocador-festa').textContent = `${festaAtual.emoji} ${festaAtual.nome}`;
   $('tocador-faixa').textContent = faixaAtual
     ? [faixaAtual.artista, faixaAtual.titulo].filter(Boolean).join(' — ')
     : 'toque para começar a festa';
 
+  // "Tocando" quer dizer que a música está andando. Mudo não é pausa: o botão
+  // do alto-falante já conta essa parte, e trocar o ▶/❚❚ por causa do mudo faria
+  // o botão mentir sobre o que ele vai fazer no clique.
   const tocando = Boolean(faixaAtual) && !audio.paused && !esperandoUmClique;
   $('tocador-play').textContent = tocando ? '❚❚' : '▶';
   $('tocador-play').title = tocando ? 'Pausar' : 'Tocar';
   caixa.classList.toggle('tocador--tocando', tocando);
+
+  // A CHAMADA. Na sala de espera ela aparece por extenso: é literalmente o
+  // momento de esperar a porta abrir, e a música faz parte dessa espera. Com a
+  // partida rolando ela vira só "Tocando", para não competir com o jogo.
+  const esperando = ondeEstou === 'sala';
+  caixa.classList.toggle('tocador--espera', esperando);
+  const chamada = $('tocador-chamada-texto');
+  if (chamada) {
+    chamada.textContent = esperando
+      ? 'Enquanto você espera…'
+      : tocando ? 'Tocando' : 'Pausado';
+  }
 
   const btnMudo = $('btn-mudo');
   if (btnMudo) {

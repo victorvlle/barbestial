@@ -232,6 +232,21 @@
         <h2>Sua mão <span class="baralho" id="baralho"></span> <span class="dica" id="dica-mao"></span></h2>
         <div class="cartas" id="mao"></div>
       </div>
+      <!-- A ZONA DAS REAÇÕES. Fica aqui, entre a mão e as últimas jogadas, e
+           não flutuando por cima da mesa: emoji voando em cima das cartas
+           atrapalha justamente na hora de ler o jogo. Este espaço já existia no
+           rodapé (era do player de música), então as reações não tiram área de
+           nada. Não é chat: não há campo de texto em lugar nenhum. -->
+      <div class="bloco bloco--reacoes" id="bloco-reacoes">
+        <h2>Reações
+          <button id="btn-reacoes" class="redondo" title="Mandar uma reação" aria-haspopup="true">
+            <span class="emoji" id="btn-reacoes-cara">😊</span>
+          </button>
+        </h2>
+        <div class="reacoes-palco" id="reacoes-palco" aria-live="polite"></div>
+        <div class="reacoes-bandeja escondida" id="reacoes-bandeja" role="menu"></div>
+      </div>
+
       <div class="bloco bloco--log">
         <h2>Últimas jogadas</h2>
         <ul class="log" id="log"></ul>
@@ -273,11 +288,24 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <!-- O TOCADOR. Pequeno, no canto, e o mesmo no menu e na mesa - a festa não
-       para quando você volta para o menu. -->
+  <!-- O TOCADOR. Pequeno, no canto de baixo à direita, por cima de tudo mas sem
+       encostar em carta nenhuma.
+
+       A IDEIA: não é "um player em cima do jogo", é a festa que já está rolando
+       lá dentro enquanto você espera na porta. Por isso a chamada em cima
+       ("Enquanto você espera…"), o equalizador que só mexe quando a música mexe,
+       e a hierarquia: primeiro QUAL FESTA, depois QUAL MÚSICA. Os controles
+       ficam embaixo, menores - eles são o detalhe, não o assunto.
+
+       Na sala de espera a chamada aparece inteira; com a partida rolando ela
+       encolhe para um "TOCANDO" discreto, para não competir com o jogo. -->
   <aside class="tocador escondida" id="tocador">
     <div class="tocador-barra"><span id="tocador-progresso"></span></div>
     <div class="tocador-corpo">
+      <p class="tocador-chamada">
+        <span class="eq" id="tocador-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span id="tocador-chamada-texto">Enquanto você espera…</span>
+      </p>
       <div class="tocador-textos">
         <p class="tocador-festa" id="tocador-festa">—</p>
         <p class="tocador-faixa" id="tocador-faixa">—</p>
@@ -302,6 +330,7 @@
   <script src="/js/animacao.js"></script>
   <script src="/js/holograma.js"></script>
   <script src="/js/render.js"></script>
+  <script src="/js/reacoes.js"></script>
   <!-- Antes de main.js: é main.js que, no fim, chama iniciarContas(). Os dois
        arquivos abaixo só usam as variáveis de main.js dentro de funções, que
        rodam depois — por isso a ordem funciona nos dois sentidos. -->

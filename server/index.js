@@ -10,6 +10,7 @@ const { Server } = require('socket.io');
 const registrarHandlers = require('./socket/handlers');
 const { ANIMAIS, REGRAS } = require('./game/cards');
 const festas = require('./game/festas');
+const reacoes = require('./game/reacoes');
 const { salas } = require('./game/room');
 const { abrir } = require('./dados/banco');
 const { lerSessao, paraOCliente } = require('./dados/usuarios');
@@ -57,6 +58,11 @@ app.get('/api/animais', (_req, res) => res.json({ animais: ANIMAIS, regras: REGR
 // As festas (playlists) e - o que mais importa - quais faixas existem mesmo no
 // disco. O player so oferece festa que tem arquivo.
 app.get('/api/festas', (_req, res) => res.json({ ok: true, festas: festas.catalogo() }));
+
+// As reacoes da partida. Mesma ideia das cartas: a lista mora no servidor e o
+// navegador so desenha o que veio dele - assim nao existe um segundo lugar para
+// atualizar, e o que o cliente oferece e exatamente o que o servidor aceita.
+app.get('/api/reacoes', (_req, res) => res.json({ ok: true, reacoes: reacoes.REACOES }));
 
 // Sinal de vida. A hospedagem chama esta rota para saber se o servidor subiu
 // antes de mandar gente para a versao nova.

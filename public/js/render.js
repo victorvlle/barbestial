@@ -25,8 +25,15 @@ function mostrarTela(qual) {
   for (const tela of document.querySelectorAll('.tela')) {
     tela.classList.toggle('escondida', tela.id !== `tela-${qual}`);
   }
-  // A música só existe dentro da partida. Sair da mesa pausa; voltar retoma.
-  if (typeof tocar === 'function') (qual === 'jogo' ? tocar : parar)();
+  // A música começa quando você já está do lado de dentro: na sala de espera e
+  // na mesa. No menu principal, silêncio. Quem está esperando na sala vê o
+  // tocador com a chamada por extenso; na mesa ela fica discreta.
+  if (typeof tocar === 'function') {
+    if (qual === 'sala' || qual === 'jogo') tocar(qual);
+    else parar();
+  }
+  // Reação é da partida e some com ela: sair da mesa não deixa emoji voando.
+  if (qual !== 'jogo' && typeof limparReacoes === 'function') limparReacoes();
 }
 
 function avisar(elementoId, mensagem) {

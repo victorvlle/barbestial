@@ -358,6 +358,21 @@ $('tocador-play').addEventListener('click', alternarPausa);
 $('tocador-proxima').addEventListener('click', () => proximaFaixa(true));
 $('tocador-volume').addEventListener('input', (e) => mudarVolume(e.target.value));
 
+// ------------------------------------------------------------ reações
+
+// O botão abre e fecha a bandeja. Quem desenha e quem manda é reacoes.js; aqui
+// ficam só as ligações, como acontece com o tocador logo acima.
+$('btn-reacoes').addEventListener('click', (e) => {
+  e.stopPropagation();
+  abrirBandeja($('reacoes-bandeja').classList.contains('escondida'));
+});
+
+// Clicar em qualquer outro lugar fecha a bandeja - inclusive numa carta, para a
+// bandeja nunca ficar aberta atrapalhando uma jogada.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#bloco-reacoes')) abrirBandeja(false);
+});
+
 // ------------------------------------------------------------ menu da partida
 
 function abrirMenu(abrir) {
@@ -426,6 +441,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('modal').classList.contains('escondida')) return fecharModal();
   if (!$('fim').classList.contains('escondida')) return $('fim').classList.add('escondida');
+  if (!$('reacoes-bandeja').classList.contains('escondida')) return abrirBandeja(false);
   esconderBalao();
   if (escolha) cancelar();
 });
@@ -445,6 +461,7 @@ aoApertarEnter('nova-senha', 'btn-criar-conta');
 carregarCatalogo();
 iniciarVitrine();
 carregarMusica();
+iniciarReacoes();
 pintarBotaoMudo();
 iniciarPalco();
 $('opt-previa').checked = preferencias.previaLigada();
