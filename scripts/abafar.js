@@ -43,7 +43,8 @@
 //   acompressor        aperta a dinâmica: de longe, a diferença entre o alto e
 //                      o baixo da música some
 //   loudnorm           normaliza TODAS as faixas no mesmo volume percebido
-//                      (-23 LUFS), para nenhuma música pular no meio da partida
+//                      (-14 LUFS, o alvo do streaming), para nenhuma música
+//                      pular no meio da partida e para a festa não ficar baixa
 //
 // Nada de som de gente, copo, risada ou porta: é só a música, tratada.
 
@@ -60,7 +61,9 @@ const DESTINO = path.join(raiz, 'public', 'assets', 'festas');
 
 const { FESTAS, FORMATOS } = require('../server/game/festas');
 
-// A cadeia, em uma linha só, do jeito que o ffmpeg entende.
+// A cadeia até antes da normalização. O volume é resolvido depois, em duas
+// passadas (ver tratar), porque numa passada só o ffmpeg estima o volume no
+// escuro e deixa a faixa estourar acima do máximo - o que vira estalo.
 const PAREDE = [
   'highpass=f=40',
   'lowpass=f=500',
@@ -70,8 +73,15 @@ const PAREDE = [
   'asoftclip=type=atan:threshold=0.7',
   'aecho=0.8:0.7:28|45:0.18|0.11',
   'acompressor=threshold=-18dB:ratio=4:attack=25:release=250',
-  'loudnorm=I=-23:TP=-2:LRA=9',
 ].join(',');
+
+// -14 LUFS: o mesmo alvo do streaming. O corte de agudos já derruba muito a
+// energia percebida, e normalizar em -23 (o padrão de broadcast) deixava a
+// festa baixa demais - dava vontade de subir o volume do computador inteiro.
+const ALVO = { I: -14, TP: -2, LRA: 9 };
+
+// Uma trava no fim da fila, para o mp3 não estourar na hora de decodificar.
+const TRAVA = 'alimiter=limit=0.9:level=false';
 
 // Mono e 96 kbps de propósito: depois do corte de agudos não sobra informação
 // nenhuma acima de 500 Hz para guardar, e o arquivo fica pequeno - o que
@@ -87,11 +97,39 @@ async function temFfmpeg() {
   }
 }
 
+// DUAS PASSADAS.
+//
+// A primeira só MEDE o volume da faixa já com o efeito aplicado; a segunda
+// normaliza usando essas medidas. É a diferença entre o ffmpeg adivinhar
+// enquanto toca (e errar para cima, estourando o pico) e ele saber de antemão.
+// Custa o dobro do tempo e roda uma vez só na vida de cada música.
+async function medir(entrada) {
+  const filtro = `${PAREDE},loudnorm=I=${ALVO.I}:TP=${ALVO.TP}:LRA=${ALVO.LRA}:print_format=json`;
+  const { stderr } = await executar(
+    'ffmpeg',
+    ['-i', entrada, '-af', filtro, '-f', 'null', '-'],
+    { maxBuffer: 1024 * 1024 * 32 }
+  );
+  // O JSON sai no fim do relatório do ffmpeg.
+  const json = stderr.slice(stderr.lastIndexOf('{'), stderr.lastIndexOf('}') + 1);
+  return JSON.parse(json);
+}
+
 async function tratar(entrada, saida) {
   await fs.promises.mkdir(path.dirname(saida), { recursive: true });
-  await executar('ffmpeg', ['-y', '-i', entrada, '-af', PAREDE, ...SAIDA, saida], {
-    maxBuffer: 1024 * 1024 * 32,
-  });
+
+  const m = await medir(entrada);
+  const normalizar =
+    `loudnorm=I=${ALVO.I}:TP=${ALVO.TP}:LRA=${ALVO.LRA}` +
+    `:measured_I=${m.input_i}:measured_TP=${m.input_tp}` +
+    `:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}` +
+    `:offset=${m.target_offset}:linear=true`;
+
+  await executar(
+    'ffmpeg',
+    ['-y', '-i', entrada, '-af', [PAREDE, normalizar, TRAVA].join(','), ...SAIDA, saida],
+    { maxBuffer: 1024 * 1024 * 32 }
+  );
 }
 
 async function principal() {

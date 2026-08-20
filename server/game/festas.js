@@ -50,6 +50,45 @@ const FESTAS = [
     emoji: '☀️',
     descricao: 'A pista de beira de piscina dos anos 2000.',
   },
+  // As de baixo ja estao registradas e so esperam arquivo. Festa sem musica nao
+  // aparece no menu, entao deixa-las prontas nao atrapalha nada - e no dia que
+  // os arquivos entrarem na pasta, elas aparecem sozinhas.
+  {
+    id: 'house',
+    nome: 'House',
+    emoji: '🏠',
+    descricao: 'Batida constante, para a noite não parar.',
+  },
+  {
+    id: 'sertanejo',
+    nome: 'Sertanejo',
+    emoji: '🤠',
+    descricao: 'A festa que todo mundo canta junto.',
+  },
+  {
+    id: 'pop',
+    nome: 'Pop',
+    emoji: '🎤',
+    descricao: 'Os refrões que ninguém consegue não cantar.',
+  },
+  {
+    id: 'funk-brasileiro',
+    nome: 'Funk Brasileiro',
+    emoji: '🔊',
+    descricao: 'Grave no talo, do jeito que atravessa parede.',
+  },
+  {
+    id: 'rock-internacional',
+    nome: 'Rock Internacional',
+    emoji: '🎸',
+    descricao: 'Os clássicos que todo mundo reconhece no primeiro acorde.',
+  },
+  {
+    id: 'classicas',
+    nome: 'Clássicas (antes de 1990)',
+    emoji: '💿',
+    descricao: 'O que tocava antes de a pista virar eletrônica.',
+  },
 ];
 
 // "Titulo - Artista.mp3" -> { titulo, artista }

@@ -39,8 +39,12 @@ const { FESTAS } = require('../server/game/festas');
 const QUANTAS = 5;
 const nomeDaFaixa = (festaId, i) => `Faixa ${i + 1} do teste - Artista ${festaId}.mp3`;
 
+// Só as duas primeiras festas ganham arquivo. As outras seis ficam vazias de
+// propósito: é assim que dá para testar que festa sem música não aparece.
+const COM_MUSICA = ['edm', 'summer-eletro-2000s'];
+
 function gerarFaixas() {
-  for (const festa of FESTAS) {
+  for (const festa of FESTAS.filter((f) => COM_MUSICA.includes(f.id))) {
     const pasta = path.join(pastaDeTeste, festa.id);
     fs.mkdirSync(pasta, { recursive: true });
     for (let i = 0; i < QUANTAS; i++) {
@@ -80,7 +84,7 @@ const encerrar = () => {
 
   // ============================================== 2. a rota das festas
   const catalogo = await fetch(`${url}/api/festas`).then((r) => r.json());
-  check(catalogo.ok && catalogo.festas.length === 2, 'o servidor lista as duas festas');
+  check(catalogo.ok && catalogo.festas.length === 8, `o servidor lista as 8 festas registradas (${catalogo.festas.length})`);
   const edm = catalogo.festas.find((f) => f.id === 'edm');
   check(edm && edm.total === QUANTAS, `a playlist sai da PASTA, não de uma lista fixa (${edm && edm.total} faixas)`);
 
@@ -117,7 +121,9 @@ const encerrar = () => {
 
   check(await pagina.locator('#festas').isVisible(), 'o seletor de festa aparece no menu');
   const botoes = await pagina.locator('.festa-opcao').allTextContents();
-  check(botoes.length === 2, `com uma opção por festa (${botoes.join(' | ')})`);
+  // Oito festas estão registradas, mas só as que TÊM arquivo aparecem: oferecer
+  // uma festa vazia é prometer silêncio.
+  check(botoes.length === 2, `só as festas com música aparecem (${botoes.join(' | ')})`);
   // O seletor já nasceu invisível uma vez, por colisão de nome de classe com o
   // confete do babuíno. Ver é diferente de existir no DOM.
   const visiveis = await pagina.evaluate(() =>
@@ -145,9 +151,23 @@ const encerrar = () => {
     'clicar numa festa deixa claro qual está escolhida'
   );
 
-  // ============================================== 4. entrar na festa toca
-  await pagina.click('#btn-entrar-festa');
-  await espera(1200);
+  // ============================================== 4. o menu é silêncio
+  //
+  // Escolher a festa não toca nada. A música é da MESA: começa quando a partida
+  // começa e para quando você volta para o menu.
+  check(
+    await pagina.evaluate(() => audio.paused && !faixaAtual),
+    'escolher a festa no menu não começa a tocar nada'
+  );
+  check(await pagina.locator('#tocador').isHidden(), 'e o tocador nem aparece no menu');
+  check(
+    (await pagina.locator('#btn-entrar-festa').count()) === 0,
+    'não existe mais botão de "entrar na festa"'
+  );
+
+  // Agora sim: a partida começa. É o mesmo caminho que o jogo usa.
+  await pagina.evaluate(() => { mostrarTela('jogo'); sortearMusica(); });
+  await espera(1500);
 
   // `position: fixed` sempre tem offsetParent nulo - a visibilidade vem do
   // navegador, não do DOM.
@@ -159,7 +179,7 @@ const encerrar = () => {
     pausado: audio.paused,
     src: audio.src,
   }));
-  check(tocadorVisivel, 'o tocador aparece');
+  check(tocadorVisivel, 'começou a partida: o tocador aparece');
   check(/Summer/i.test(tocando.festa), `mostrando a festa escolhida (${tocando.festa})`);
   check(tocando.faixa.includes('—'), `e a música da vez (${tocando.faixa})`);
   check(!tocando.pausado && tocando.andando, 'a música está TOCANDO de verdade, não só carregada');
@@ -242,13 +262,14 @@ const encerrar = () => {
   });
   check(progresso > 30 && progresso < 70, `a barra de progresso acompanha a música (${progresso}%)`);
 
-  // ============================================== 7. a festa não para no menu
+  // ============================================== 7. voltar ao menu para a festa
   await pagina.evaluate(() => mostrarTela('entrada'));
   await espera(400);
   check(
-    await pagina.evaluate(() => !audio.paused),
-    'voltar ao menu não corta a música - a festa continua do outro lado da parede'
+    await pagina.evaluate(() => audio.paused),
+    'voltar ao menu para a música - o menu é silêncio'
   );
+  check(await pagina.locator('#tocador').isHidden(), 'e o tocador some junto');
 
   check(erros.length === 0, `nenhum erro de JavaScript ${erros.length ? JSON.stringify(erros.slice(0, 2)) : ''}`);
   await navegador.close();

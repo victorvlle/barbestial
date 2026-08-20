@@ -556,7 +556,10 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   margin: 0 0 .6rem; font-size: .72rem; letter-spacing: .12em;
   text-transform: uppercase; color: var(--suave);
 }
-.festas-lista { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+/* Duas por linha quando cabem, e quantas linhas forem precisas: o jogo já
+   nasce com oito festas registradas, e elas vão aparecendo conforme ganham
+   música. */
+.festas-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .45rem; }
 .festa-opcao {
   display: flex; align-items: center; gap: .45rem;
   padding: .55rem .6rem; border-radius: 11px; cursor: pointer;
@@ -568,7 +571,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .festa-opcao--ativa { border-color: var(--neon); background: #241c0f; color: #ffe9c2; }
 .festa-emoji { font-size: 1.1rem; line-height: 1; }
 .festa-nome { font-weight: 600; line-height: 1.2; }
-#btn-entrar-festa { margin-top: .55rem; }
+.festas-dica { margin: .5rem 0 0; font-size: .7rem; color: var(--suave); }
 
 /* ============================== O TOCADOR ==============================
    Canto de baixo, à esquerda, pequeno. Fica por cima de tudo porque a música
@@ -1388,7 +1391,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
   .festas h3 { margin-bottom: .3rem; font-size: .64rem; }
   .festa-opcao { padding: .35rem .5rem; font-size: .76rem; gap: .35rem; }
   .festa-emoji { font-size: .95rem; }
-  #btn-entrar-festa { margin-top: .3rem; padding: .38rem .6rem; font-size: .78rem; }
+  .festas-dica { margin-top: .35rem; font-size: .66rem; }
   .opcoes .secundario { padding: .42rem .6rem; font-size: .8rem; }
   /* Numa janela baixa, a frase de incentivo das marcas é a primeira a sair:
      os números continuam, que é o que interessa. */

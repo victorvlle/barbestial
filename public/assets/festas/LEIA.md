@@ -31,13 +31,29 @@ entra na festa — sem reiniciar nada.
 
 Festa sem nenhum arquivo simplesmente não aparece no menu.
 
-## As festas de hoje
+## As festas registradas
 
-- `edm/` — ⚡ EDM
-- `summer-eletro-2000s/` — ☀️ Summer Eletro 2000s
+| pasta | festa |
+|---|---|
+| `edm/` | ⚡ EDM |
+| `summer-eletro-2000s/` | ☀️ Summer Eletro 2000s |
+| `house/` | 🏠 House |
+| `sertanejo/` | 🤠 Sertanejo |
+| `pop/` | 🎤 Pop |
+| `funk-brasileiro/` | 🔊 Funk Brasileiro |
+| `rock-internacional/` | 🎸 Rock Internacional |
+| `classicas/` | 💿 Clássicas (antes de 1990) |
 
-Uma festa nova precisa de três linhas em `server/game/festas.js` (id, nome,
-emoji) e da pasta com os arquivos. O player não muda.
+Todas já existem no jogo. **Festa sem arquivo não aparece no menu** — ela entra
+sozinha no dia em que a pasta tiver música.
+
+Uma festa fora dessa lista precisa de três linhas em `server/game/festas.js`
+(id, nome, emoji) e da pasta. O player não muda.
+
+## Quando a música toca
+
+Só dentro da partida. Escolher a festa no menu é só escolher; a playlist começa
+quando a partida começa e para quando você volta para o menu.
 
 ## Para publicar no Render
 

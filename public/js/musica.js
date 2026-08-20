@@ -11,13 +11,20 @@
 // Festa sem arquivo nenhum não aparece para escolher - melhor não oferecer do
 // que oferecer silêncio.
 //
+// QUANDO A MÚSICA TOCA: só dentro da partida. Escolher a festa no menu é só
+// escolher - nada começa a tocar ali. Ao sair da mesa para o menu, a música
+// para. É o comportamento que o jogo pede: o menu é silêncio, a mesa é festa.
+//
 // A ORDEM: sorteio por "saco de bolas". Embaralha as faixas, toca uma a uma até
 // acabar o saco, e só então embaralha de novo - garantindo que todas tocam
 // antes de qualquer repetição. Ao embaralhar de novo, se a primeira nova for
 // igual à última tocada, ela é trocada de lugar: nunca a mesma música duas
 // vezes seguidas.
 
-const VOLUME_PADRAO = 0.7;
+// Volume cheio por padrão. As faixas já saem do tratamento no mesmo volume
+// (ver scripts/abafar.js), e o efeito de parede por si só derruba muito a
+// energia - começar em 70% deixava tudo baixo demais.
+const VOLUME_PADRAO = 1;
 
 let FESTAS = [];          // o catálogo que veio do servidor
 let festaAtual = null;    // a festa escolhida
@@ -124,27 +131,22 @@ audio.addEventListener('timeupdate', pintarProgresso);
 audio.addEventListener('play', pintarTocador);
 audio.addEventListener('pause', pintarTocador);
 
-// Entrar na festa: escolhe a festa, sorteia uma faixa e começa a tocar.
-function entrarNaFesta(id = festaAtual && festaAtual.id) {
+// Escolher a festa no menu. NÃO toca nada: só guarda a escolha e prepara a
+// ordem. Quem começa a festa é a partida.
+function escolherFesta(id) {
   const escolhida = festaPorId(id);
-  if (!escolhida || !escolhida.total) return false;
+  if (!escolhida) return false;
 
-  const trocou = !festaAtual || festaAtual.id !== escolhida.id;
   festaAtual = escolhida;
   preferencias.definirFesta(escolhida.id);
-  if (trocou || !faixaAtual) {
-    encherOSaco();
-    proximaFaixa(true);
-  } else {
-    tentarTocar();
-  }
+  faixaAtual = null;
+  encherOSaco();
   desenharEscolhaDeFesta();
   pintarTocador();
   return true;
 }
 
-// Chamado quando a tela muda. A música NÃO para ao voltar ao menu - a festa
-// continua acontecendo do outro lado da parede, que é justamente a ideia.
+// Entrou na mesa: a festa começa.
 function tocar() {
   naTelaDoJogo = true;
   if (!festaAtual) return;
@@ -152,8 +154,12 @@ function tocar() {
   else if (audio.paused && preferencias.musicaLigada()) tentarTocar();
 }
 
+// Saiu da mesa: a festa para. Sem isso a música continuaria no menu, e o menu
+// não é festa.
 function parar() {
   naTelaDoJogo = false;
+  audio.pause();
+  pintarTocador();
 }
 
 // Partida nova: ordem nova. É o que garante que duas partidas seguidas não
@@ -165,7 +171,7 @@ function sortearMusica() {
 }
 
 function alternarPausa() {
-  if (!faixaAtual) return entrarNaFesta();
+  if (!faixaAtual) return proximaFaixa(true);
   if (audio.paused) tentarTocar();
   else audio.pause();
   pintarTocador();
@@ -219,13 +225,7 @@ function desenharEscolhaDeFesta() {
     nome.textContent = festa.nome;
 
     botao.append(emoji, nome);
-    botao.addEventListener('click', () => {
-      festaAtual = festa;
-      preferencias.definirFesta(festa.id);
-      encherOSaco();
-      desenharEscolhaDeFesta();
-      pintarTocador();
-    });
+    botao.addEventListener('click', () => escolherFesta(festa.id));
     lista.appendChild(botao);
   }
 }
@@ -236,7 +236,9 @@ function pintarTocador() {
   const caixa = $('tocador');
   if (!caixa) return;
 
-  const temMusica = Boolean(festaAtual && festaAtual.total);
+  // O tocador é da mesa, igual à música: no menu ele não aparece, porque no
+  // menu não toca nada.
+  const temMusica = Boolean(naTelaDoJogo && festaAtual && festaAtual.total && faixaAtual);
   caixa.classList.toggle('escondida', !temMusica);
   if (!temMusica) return;
 

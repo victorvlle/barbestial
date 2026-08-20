@@ -357,7 +357,6 @@ $('btn-mudo').addEventListener('click', alternarMudo);
 $('tocador-play').addEventListener('click', alternarPausa);
 $('tocador-proxima').addEventListener('click', () => proximaFaixa(true));
 $('tocador-volume').addEventListener('input', (e) => mudarVolume(e.target.value));
-$('btn-entrar-festa').addEventListener('click', () => entrarNaFesta());
 
 // ------------------------------------------------------------ menu da partida
 
